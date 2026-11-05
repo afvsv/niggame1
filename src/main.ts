@@ -8,17 +8,26 @@ import { rich, setLang, t } from './core/i18n';
 import { Input } from './core/input';
 import { clearSave, loadSave, writeSave } from './core/save';
 import { HayParticles } from './fx/particles';
-import { CONTAINERS, ItemId, TOOLS, itemById } from './data/tools';
-import { Game, GameEvents } from './game/Game';
+import { ALL_ITEMS, ItemId, isContainer, itemById } from './data/tools';
+import { NEEDLES } from './data/needles';
+import { Game, GameEvents, World } from './game/Game';
 import { Inventory } from './game/Inventory';
+import { CONTAINER_WORLD, ContainerProps } from './game/containers';
+import { NeedleField, placeNeedles } from './game/needles';
+import { supportHeight } from './game/support';
+import { STEPS, Tutorial } from './game/tutorial';
+import { BARN } from './world/nature';
+import { EndingScreen } from './ui/ending';
+import { needleName, needlePerk } from './ui/needleText';
 import { generateStack } from './haystack/generate';
 import { HayGrid } from './haystack/grid';
 import { HaystackView } from './haystack/HaystackView';
+import { raycastGrid } from './haystack/raycast';
 import { PlayerController } from './player/PlayerController';
 import { renderIcons } from './tools/icons';
 import { ViewModel } from './tools/ViewModel';
 import { Hotbar } from './ui/hotbar';
-import { Hud } from './ui/hud';
+import { Hud, WorldLabel } from './ui/hud';
 import { ShopScreen } from './ui/shop';
 import { Colliders } from './world/colliders';
 import { buildShed } from './world/shed';
@@ -68,7 +77,9 @@ const sun = createLights(scene, renderer);
 const H = BALANCE.hay, S = BALANCE.stack;
 const grid = new HayGrid(S.gridX, S.gridY, S.gridZ, H.cellSize, (-S.gridX * H.cellSize) / 2, 0, (-S.gridZ * H.cellSize) / 2, H.cellMaxStrands);
 const save = loadSave();
-if (!save || !grid.deserialize(save.grid)) generateStack(grid, S);
+// A save from a different stack size cannot be loaded: the stack (and its needles) start over.
+const gridOk = !!save && grid.deserialize(save.grid);
+if (!gridOk) generateStack(grid, S);
 const hayLook = { set: tex.hay, tile: 1.6, variation: tex.variation, variationTile: 7, brightness: 0.3, tint: '#d0b070', tintAmount: 0.3 };
 const hayMat = triplanarMaterial({ ...hayLook, vertexColors: true });
 const strawMat = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.65, envMapIntensity: 0.5 });
@@ -81,7 +92,7 @@ const colliders = new Colliders(grid);
 const shed = buildShed(scene, colliders, tex, triplanarMaterial(hayLook));
 const input = new Input(renderer.domElement);
 const player = new PlayerController(colliders, camera);
-if (save) {
+if (save && gridOk) {
   player.pos.set(save.player.x, save.player.y, save.player.z);
   player.yaw = save.player.yaw;
   player.pitch = save.player.pitch;
@@ -95,46 +106,90 @@ const audio = new Audio();
 const hud = new Hud();
 const inv = new Inventory();
 inv.load(save?.inv);
-const icons = renderIcons(renderer, [...TOOLS.map((x) => x.id), ...CONTAINERS.map((x) => x.id)] as ItemId[]);
+if (!gridOk) for (const st of inv.containers.values()) st.placed = null; // they stood by the old stack
+const icons = renderIcons(renderer, ALL_ITEMS.map((x) => x.id));
 const hotbar = new Hotbar(icons);
 const vm = new ViewModel(inv.active, renderer);
 vm.setAspect(window.innerWidth / window.innerHeight);
 
-const counterTop = new THREE.Vector3(4.5, 1.12, 8.6);
+// Needles and placed containers.
+const needles = new NeedleField(gridOk && save?.needles?.length === NEEDLES.length ? save.needles : placeNeedles(grid, S.seed + 11));
+scene.add(needles.group);
+const containers = new ContainerProps(inv);
+scene.add(containers.group);
+const support = (x: number, z: number, maxY: number, r: number) => supportHeight(grid, colliders.boxes, x, z, maxY, r);
+const clampTo = (v: number, h: number) => Math.max(-h + 0.5, Math.min(h - 0.5, v));
+const world: World = {
+  counter: shed.counter, shop: shed.shop, door: shed.door, board: shed.board, containers, needles, support,
+  clamp: (x, z, from) => (shed.inside(from.x, from.z) ? [clampTo(x, BARN.hx), clampTo(z, BARN.hz)] : [x, z]),
+  exitZ: shed.exitZ,
+};
+
 const events: GameEvents = {
   grab: (got, tool) => { audio.rustle(0.5 + Math.min(1, got / 20)); vm.swing(tool.cooldown); },
-  full: () => { audio.thud(); hud.shakeCarry(); },
+  full: () => { audio.thud(); hud.shakeHeld(); },
   sell: (value, n) => {
     audio.sale(n / Math.max(1, game.capacity));
     hud.pop(`+${fmtMoney(value)}`, 'good');
     hud.bumpMoney();
-    particles.burst(counterTop.x, counterTop.y, counterTop.z, 0, 1, 0, Math.min(60, 10 + n / 2));
+    const c = shed.counterTop;
+    particles.burst(c.x, c.y, c.z, 0, 1, 0, Math.min(60, 10 + n / 2));
   },
   buy: (id) => {
     audio.purchase();
     hud.pop(`−${fmtMoney(itemById(id).price)}`, 'spend');
     hud.bumpMoney();
+    hotbar.render(inv, capOf);
     hotbar.flash(id);
   },
   toolChange: () => audio.tick(),
   openShop: () => openShop(),
+  pour: (n) => { audio.pour(n); vm.swing(0.3); },
+  place: () => audio.place(),
+  pickUp: () => audio.place(),
+  notice: () => audio.thud(),
+  needle: (i) => {
+    audio.needle();
+    const id = needles.id(i);
+    hud.toast(t('toast.needle', { n: needles.found.length, total: needles.total }), needleName(id), needlePerk(id));
+    shed.setNeedles(needles.found);
+    persist();
+  },
+  unlocked: () => setTimeout(() => {
+    audio.doorOpen();
+    shed.unlock();
+    hud.toast(t('toast.open'), t('toast.openTitle'), t('toast.openText'), 'open', 6);
+  }, 1800),
+  escaped: () => {
+    persist();
+    ending.open(game.stats, needles.found.length);
+    document.exitPointerLock();
+  },
+  beep: (s) => audio.beep(s),
 };
-const game = new Game(grid, camera, { counter: shed.counter, shop: shed.shop }, input, particles, inv, events);
-if (save) { game.money = save.money; game.carried = Math.min(save.carried, inv.capacity); }
+const game = new Game(grid, camera, world, input, particles, inv, events);
+const capOf = (id: ItemId) => (isContainer(id) ? game.containerCapacity(id) : 0);
+if (save) {
+  game.money = save.money;
+  game.carried = Math.min(save.carried, game.capacity);
+  if (save.stats) game.stats = { ...game.stats, ...save.stats };
+  game.escaped = !!save.escaped && game.unlocked;
+}
+shed.setNeedles(needles.found);
+if (game.unlocked) shed.unlock(true);
+const tutorial = new Tutorial();
+tutorial.step = Math.max(0, Math.min(STEPS.length, save?.tutorial ?? 0));
 
-let lastActive = inv.active;
 inv.onChange = () => {
-  hotbar.render(inv);
+  hotbar.render(inv, capOf);
   vm.setTool(inv.active);
-  if (inv.active !== lastActive) hotbar.showName(t(`item.${inv.active}`));
-  lastActive = inv.active;
 };
-hotbar.render(inv);
+hotbar.render(inv, capOf);
 
 // Overlay / pointer lock / screens
 const overlay = document.getElementById('overlay')!;
 overlayText.textContent = t('overlay.start');
-document.getElementById('overlay-controls')!.innerHTML = ['controls.move', 'controls.dig', 'controls.sell', 'controls.tools'].map((k) => `<li>${rich(t(k))}</li>`).join('');
+document.getElementById('overlay-controls')!.innerHTML = `<li class="story">${rich(t('overlay.story'))}</li>` + ['controls.move', 'controls.dig', 'controls.sell', 'controls.tools'].map((k) => `<li>${rich(t(k))}</li>`).join('');
 const resetBtn = document.getElementById('overlay-reset')!;
 resetBtn.textContent = t('overlay.reset');
 let saveDisabled = false;
@@ -180,6 +235,17 @@ window.addEventListener('keydown', (e) => {
 });
 overlay.addEventListener('click', () => { audio.unlock(); input.requestLock(); });
 
+const ending = new EndingScreen();
+ending.onStay = () => {
+  input.requestLock();
+  setTimeout(() => { if (!input.locked && !shop.isOpen) showPause(); }, 400);
+};
+ending.onNewGame = () => {
+  if (!confirm(t('ending.confirm'))) return;
+  saveDisabled = true;
+  clearSave();
+  location.reload();
+};
 const shop = new ShopScreen(game, icons);
 shop.onBuyFail = () => audio.thud();
 function openShop(): void {
@@ -198,13 +264,17 @@ shop.onClose = (relock) => {
 input.onLockChange = (locked) => {
   if (locked) { overlay.classList.add('hidden'); return; }
   persist();
-  if (!shop.isOpen) showPause();
+  if (!shop.isOpen && !ending.isOpen) showPause();
 };
 
 // Saving
 function persist(): void {
   if (saveDisabled) return;
-  writeSave({ money: game.money, carried: game.carried, inv: inv.serialize(), player: { x: player.pos.x, y: player.pos.y, z: player.pos.z, yaw: player.yaw, pitch: player.pitch } }, grid);
+  writeSave({
+    money: game.money, carried: game.carried, inv: inv.serialize(),
+    player: { x: player.pos.x, y: player.pos.y, z: player.pos.z, yaw: player.yaw, pitch: player.pitch },
+    needles: needles.saves, tutorial: tutorial.step, stats: game.stats, escaped: game.escaped,
+  }, grid);
 }
 setInterval(persist, BALANCE.autosaveSeconds * 1000);
 window.addEventListener('beforeunload', persist);
@@ -257,30 +327,59 @@ function countFps(elapsed: number): void {
   fpsFrames = 0;
   fpsTime = 0;
 }
+const labelDir = new THREE.Vector3();
 function frame(now: number): void {
   countFps(Math.max(0, now - last) / 1000);
   // rAF timestamps can precede `last` after a long first task, so clamp to [0, 50 ms].
   const dt = Math.max(0, Math.min(0.05, (now - last) / 1000));
   last = now;
   if (!document.hidden && input.locked && settings.graphics.resolution === 'auto' && !params.has('fixedres')) adaptResolution(dt);
+  player.speedMul = 1 + game.perks.speed;
   player.update(dt, input);
   game.update(dt);
   vm.update(dt, { speed: Math.hypot(player.vel.x, player.vel.z), onGround: player.onGround, mouseDX: input.mouseDX, mouseDY: input.mouseDY });
-  vm.setLoad(game.carried / game.capacity);
+  const load = game.load();
+  vm.setLoad(load ? load[0] / load[1] : 0);
+  vm.setSignal(game.detector.strength, game.detector.blink);
   camera.rotation.x -= vm.kick * 0.008; // visual-only nod on each swing; the player resets rotation next frame
   stackView.update(5);
-  if (stackView.changed) { renderer.shadowMap.needsUpdate = true; stackView.changed = false; }
-  shed.update(dt);
+  containers.update(dt, (id, x, z, maxY) => support(x, z, maxY, CONTAINER_WORLD[id].radius), capOf);
+  needles.update(dt, grid, (x, z, maxY) => support(x, z, maxY, 0.04));
+  const doorMoving = shed.update(dt);
+  if (stackView.changed || containers.moved || doorMoving) { renderer.shadowMap.needsUpdate = true; stackView.changed = containers.moved = false; }
   particles.update(dt);
+  const placed = inv.placed();
+  tutorial.update({
+    carried: game.carried, sold: game.stats.sold, has: (id) => inv.has(id), placedAny: placed.length > 0,
+    fillAny: Math.max(0, ...[...inv.containers.values()].map((c) => c.fill)), containerSold: game.stats.containerSold,
+    found: needles.found.length, unlocked: game.unlocked, escaped: game.escaped,
+  });
+  hotbar.render(inv, capOf);
   hud.update({
     money: game.money,
     hayLeft: grid.total,
-    carried: game.carried,
-    capacity: game.capacity,
-    carrierName: inv.container ? t(`item.${inv.container.id}`) : t('hud.hands'),
     hint: game.hint,
     aimActive: game.target !== null,
+    heldName: t(`item.${inv.active}`),
+    load,
+    found: needles.found.length,
+    total: needles.total,
+    unlocked: game.unlocked,
+    step: tutorial.done ? null : { n: tutorial.step + 1, total: STEPS.length, text: t(`step.${tutorial.key}`, { n: needles.found.length, total: needles.total }) },
+    signal: inv.active === 'detector' ? game.detector.strength : null,
   }, dt);
+  const labels: WorldLabel[] = [];
+  for (const { def, state } of placed) {
+    const cap = game.containerCapacity(def.id);
+    const pos = containers.labelAnchor(def.id, new THREE.Vector3());
+    if (!pos) continue;
+    // Behind the stack the label fades instead of floating over the hay.
+    const d = pos.distanceTo(camera.position);
+    const dir = labelDir.copy(pos).sub(camera.position).divideScalar(d || 1);
+    const hit = d < 40 ? raycastGrid(grid, camera.position.x, camera.position.y, camera.position.z, dir.x, dir.y, dir.z, d) : null;
+    labels.push({ key: def.id, pos, title: t(`item.${def.id}`), value: `${state.fill} / ${cap}`, full: state.fill >= cap, occluded: !!hit && hit.dist < d - 0.3 });
+  }
+  hud.updateLabels(labels, camera);
   renderer.clear();
   renderer.render(scene, camera);
   vm.render(renderer);
@@ -290,4 +389,4 @@ function frame(now: number): void {
 requestAnimationFrame(frame);
 
 // Debug handle for tests and the browser console.
-(window as unknown as { __game: unknown }).__game = { game, player, grid, renderer, camera, scene, persist, inv, shop, icons, vm, settings, settingsScreen, applySettings, sun };
+(window as unknown as { __game: unknown }).__game = { game, player, grid, renderer, camera, scene, persist, inv, shop, icons, vm, settings, settingsScreen, applySettings, sun, needles, containers, shed, tutorial, ending, hud };
