@@ -2,6 +2,28 @@ import * as THREE from 'three';
 
 const MAX = 400;
 
+/** A few crossed straw strokes on a transparent background. */
+function strawSprite(): THREE.CanvasTexture {
+  const c = document.createElement('canvas');
+  c.width = c.height = 32;
+  const ctx = c.getContext('2d')!;
+  ctx.lineCap = 'round';
+  const strokes: Array<[string, number, number, number, number]> = [
+    ['#d9b45a', 5, 24, 27, 9], ['#b98f3e', 9, 8, 24, 27], ['#ecd08a', 4, 15, 29, 17],
+  ];
+  for (const [col, x1, y1, x2, y2] of strokes) {
+    ctx.strokeStyle = col;
+    ctx.lineWidth = 2.5;
+    ctx.beginPath();
+    ctx.moveTo(x1, y1);
+    ctx.lineTo(x2, y2);
+    ctx.stroke();
+  }
+  const tex = new THREE.CanvasTexture(c);
+  tex.colorSpace = THREE.SRGBColorSpace;
+  return tex;
+}
+
 /** Cheap straw bits flying off when digging. */
 export class HayParticles {
   readonly points: THREE.Points;
@@ -13,7 +35,7 @@ export class HayParticles {
   constructor() {
     const geo = new THREE.BufferGeometry();
     geo.setAttribute('position', new THREE.BufferAttribute(this.pos, 3).setUsage(THREE.DynamicDrawUsage));
-    const mat = new THREE.PointsMaterial({ color: '#e2c46e', size: 0.045, sizeAttenuation: true });
+    const mat = new THREE.PointsMaterial({ map: strawSprite(), color: '#b39256', size: 0.09, sizeAttenuation: true, alphaTest: 0.5 });
     this.points = new THREE.Points(geo, mat);
     this.points.frustumCulled = false;
     for (let i = 0; i < MAX; i++) this.pos[i * 3 + 1] = -100;

@@ -6,6 +6,8 @@ export class Input {
   mouseDY = 0;
   lmb = false;
   lmbPressed = false;
+  /** Mouse wheel steps this frame (+1 = down). */
+  wheel = 0;
   locked = false;
   onLockChange: (locked: boolean) => void = () => {};
 
@@ -25,6 +27,7 @@ export class Input {
     window.addEventListener('mousedown', (e) => {
       if (e.button === 0 && this.locked) { this.lmb = true; this.lmbPressed = true; }
     });
+    window.addEventListener('wheel', (e) => { if (this.locked && e.deltaY) this.wheel += Math.sign(e.deltaY); }, { passive: true });
     window.addEventListener('mouseup', (e) => { if (e.button === 0) this.lmb = false; });
     document.addEventListener('pointerlockchange', () => {
       this.locked = document.pointerLockElement === this.target;
@@ -47,5 +50,6 @@ export class Input {
     this.mouseDX = 0;
     this.mouseDY = 0;
     this.lmbPressed = false;
+    this.wheel = 0;
   }
 }

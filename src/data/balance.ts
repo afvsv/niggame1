@@ -24,12 +24,6 @@ export const BALANCE = {
     stepHeight: 0.45,
     mouseSensitivity: 0.0022,
   },
-  reachM: 2.8,
-  hands: {
-    grab: 2, // strands per click
-    capacity: 10, // strands you can carry without a container
-    cooldown: 0.22, // seconds between grabs while holding LMB
-    radiusCells: 1, // how far from the aimed cell a grab can reach
-  },
+  reachM: 2.8, // tools and containers live in data/tools.ts
   autosaveSeconds: 15,
 } as const;
