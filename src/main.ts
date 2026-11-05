@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import '@fontsource-variable/rubik';
+import '@fontsource-variable/roboto-condensed';
 import './style.css';
 import { BALANCE } from './data/balance';
 import { Audio } from './core/audio';
@@ -27,9 +27,9 @@ import { buildShed } from './world/shed';
 const params = new URLSearchParams(location.search);
 if (params.has('reset')) clearSave();
 
-// Canvas signs and the HUD use Rubik; wait briefly so the first frame does not flash a fallback font.
+// Canvas signs and the HUD use Roboto Condensed; wait briefly so the first frame does not flash a fallback font.
 await Promise.race([
-  Promise.all(['500 32px "Rubik Variable"', '600 32px "Rubik Variable"'].map((f) => document.fonts.load(f, 'Сено $0'))),
+  Promise.all(['500 32px "Roboto Condensed Variable"', '700 32px "Roboto Condensed Variable"'].map((f) => document.fonts.load(f, 'Сено $0'))),
   new Promise((r) => setTimeout(r, 1500)),
 ]).catch(() => {});
 
@@ -76,7 +76,7 @@ const inv = new Inventory();
 inv.load(save?.inv);
 const icons = renderIcons(renderer, [...TOOLS.map((x) => x.id), ...CONTAINERS.map((x) => x.id)] as ItemId[]);
 const hotbar = new Hotbar(icons);
-const vm = new ViewModel(inv.active);
+const vm = new ViewModel(inv.active, renderer);
 vm.setAspect(window.innerWidth / window.innerHeight);
 
 const counterTop = new THREE.Vector3(4.5, 1.12, 8.6);
@@ -175,6 +175,7 @@ function frame(now: number): void {
   player.update(dt, input);
   game.update(dt);
   vm.update(dt, { speed: Math.hypot(player.vel.x, player.vel.z), onGround: player.onGround, mouseDX: input.mouseDX, mouseDY: input.mouseDY });
+  vm.setLoad(game.carried / game.capacity);
   camera.rotation.x -= vm.kick * 0.008; // visual-only nod on each swing; the player resets rotation next frame
   stackView.update(6);
   particles.update(dt);

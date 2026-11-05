@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { TOOLS, ToolId } from '../data/tools';
-import { buildModel } from './models';
+import { HayLoad, buildModel, loadOf, toolEnvironment } from './models';
 
 const easeOutCubic = (x: number) => 1 - (1 - x) ** 3;
 const easeInCubic = (x: number) => x * x * x;
@@ -8,11 +8,12 @@ const easeOutBack = (x: number) => { const c = 1.70158; return 1 + (c + 1) * (x 
 const clamp = (v: number, a: number, b: number) => Math.min(b, Math.max(a, v));
 
 // Rest pose of each held tool in camera space: position and rotation (x, y, z).
+// Held slightly right of centre and pointing into the view, like the reference game.
 const POSE: Record<ToolId, [number, number, number, number, number, number]> = {
-  hands: [0.3, -0.25, -0.55, 0.35, 0.15, 0],
-  toy_shovel: [0.3, -0.26, -0.45, 0.35, 0.08, -0.1],
-  spade: [0.3, -0.36, -0.3, 0.22, 0.05, -0.12],
-  pitchfork: [0.3, -0.37, -0.28, 0.2, 0.05, -0.12],
+  hands: [0.12, -0.16, -0.46, 0.2, 0.3, 0],
+  toy_shovel: [0.15, -0.2, -0.36, 0.12, 0.05, -0.05],
+  spade: [0.14, -0.34, -0.26, 0.24, 0.03, -0.04],
+  pitchfork: [0.13, -0.36, -0.22, 0.22, 0.02, -0.03],
 };
 
 export interface MoveState { speed: number; onGround: boolean; mouseDX: number; mouseDY: number }
@@ -26,6 +27,7 @@ export class ViewModel {
   readonly camera = new THREE.PerspectiveCamera(60, 1, 0.01, 10);
   private readonly holder = new THREE.Group();
   private readonly models = new Map<ToolId, THREE.Object3D>();
+  private readonly loads: HayLoad[] = [];
   private current: ToolId;
   private pending: ToolId | null = null;
   private swingT = 1;
@@ -39,14 +41,18 @@ export class ViewModel {
   /** 0..1 visual camera kick after a swing; the main loop adds it to camera pitch. */
   kick = 0;
 
-  constructor(initial: ToolId) {
-    this.scene.add(new THREE.HemisphereLight('#fff4dc', '#5a4a33', 1.7));
-    const sun = new THREE.DirectionalLight('#fff1d0', 1.4);
+  constructor(initial: ToolId, renderer: THREE.WebGLRenderer) {
+    this.scene.environment = toolEnvironment(renderer);
+    this.scene.environmentIntensity = 0.45;
+    this.scene.add(new THREE.HemisphereLight('#fff4dc', '#5a4a33', 1.0));
+    const sun = new THREE.DirectionalLight('#fff1d0', 1.3);
     sun.position.set(-1, 2, 1);
     this.scene.add(sun, this.holder);
     for (const t of TOOLS) {
       const m = buildModel(t.id);
       m.visible = false;
+      const load = loadOf(m);
+      if (load) this.loads.push(load);
       this.models.set(t.id, m);
       this.holder.add(m);
     }
@@ -63,6 +69,9 @@ export class ViewModel {
   }
 
   get switching(): boolean { return this.switchT < 1; }
+
+  /** How full the player's load is (0..1); shown as straws in hand or on the tool. */
+  setLoad(fill: number): void { for (const l of this.loads) l.set(fill); }
 
   swing(duration: number): void {
     this.swingT = 0;

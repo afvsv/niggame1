@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import type { ItemId } from '../data/tools';
-import { buildModel, iconPose } from './models';
+import { buildModel, iconPose, loadOf, toolEnvironment } from './models';
 
 /**
  * Renders each item model into an offscreen target and returns PNG data URLs.
@@ -11,8 +11,10 @@ export function renderIcons(renderer: THREE.WebGLRenderer, ids: readonly ItemId[
   const S = size * 2;
   const rt = new THREE.WebGLRenderTarget(S, S);
   const scene = new THREE.Scene();
-  scene.add(new THREE.HemisphereLight('#fff4dc', '#6a5a43', 2.4));
-  const key = new THREE.DirectionalLight('#ffffff', 2.2);
+  scene.environment = toolEnvironment(renderer);
+  scene.environmentIntensity = 0.7;
+  scene.add(new THREE.HemisphereLight('#fff4dc', '#6a5a43', 1.2));
+  const key = new THREE.DirectionalLight('#ffffff', 1.8);
   key.position.set(-1.5, 2.5, 3);
   scene.add(key);
   const cam = new THREE.PerspectiveCamera(28, 1, 0.01, 50);
@@ -43,6 +45,7 @@ export function renderIcons(renderer: THREE.WebGLRenderer, ids: readonly ItemId[
     const model = buildModel(id);
     const pose = iconPose(id);
     model.rotation.copy(pose.rot);
+    loadOf(model)?.set(pose.fill);
     scene.add(model);
     model.updateMatrixWorld(true);
     new THREE.Box3().setFromObject(model).getBoundingSphere(sphere);
@@ -71,7 +74,7 @@ export function renderIcons(renderer: THREE.WebGLRenderer, ids: readonly ItemId[
     result.set(id, out.toDataURL('image/png'));
 
     scene.remove(model);
-    model.traverse((o) => { if (o instanceof THREE.Mesh) o.geometry.dispose(); });
+    model.traverse((o) => { if (o instanceof THREE.Mesh && !(o instanceof THREE.InstancedMesh)) o.geometry.dispose(); });
   }
 
   renderer.setRenderTarget(prevTarget);
