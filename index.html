@@ -9,20 +9,29 @@
   <body>
     <div id="app"></div>
     <div id="hud">
+      <div id="labels"></div>
       <div id="fps" class="hidden"></div>
       <div id="crosshair"></div>
+      <div id="objective">
+        <div class="obj-head"><span id="obj-title"></span><span id="obj-count"></span></div>
+        <div id="obj-goal"></div>
+        <div id="obj-pips"></div>
+        <div id="obj-step"><span id="obj-step-n"></span><span id="obj-step-text"></span></div>
+      </div>
       <div id="hud-top-right">
         <div id="hud-money">$0.00</div>
         <div id="hud-hay"></div>
         <div id="hud-pops"></div>
       </div>
       <div id="hud-hint"></div>
+      <div id="toast" class="hidden">
+        <div id="toast-kicker"></div>
+        <div id="toast-title"></div>
+        <div id="toast-text"></div>
+      </div>
       <div id="hud-bottom">
-        <div id="hotbar-name"></div>
-        <div id="carry">
-          <div class="carry-label"><span id="carry-name"></span><span id="carry-num"></span></div>
-          <div class="carry-bar"><div id="carry-fill"></div></div>
-        </div>
+        <div id="signal" class="hidden"><span id="signal-label"></span><span id="signal-bars"><i></i><i></i><i></i><i></i><i></i></span></div>
+        <div id="held"><span id="held-name"></span><span id="held-load"></span></div>
         <div id="hotbar"></div>
       </div>
     </div>
@@ -65,6 +74,19 @@
             <button id="settings-defaults" class="btn ghost" type="button"></button>
             <button id="settings-reload" class="btn hidden" type="button"></button>
             <button id="settings-close" class="btn" type="button"></button>
+          </span>
+        </footer>
+      </div>
+    </div>
+    <div id="ending" class="screen hidden" role="dialog" aria-labelledby="ending-title">
+      <div class="panel ending-panel">
+        <header><div><h2 id="ending-title"></h2><p id="ending-subtitle"></p></div></header>
+        <dl id="ending-stats"></dl>
+        <footer>
+          <span id="ending-note"></span>
+          <span class="settings-actions">
+            <button id="ending-stay" class="btn ghost" type="button"></button>
+            <button id="ending-new" class="btn" type="button"></button>
           </span>
         </footer>
       </div>

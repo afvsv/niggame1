@@ -14,6 +14,8 @@ export class PlayerController {
   onGround = false;
   /** Multiplier from the settings. */
   sensitivity = 1;
+  /** Movement speed multiplier (needle bonus). */
+  speedMul = 1;
   private readonly box: AABB = { minX: 0, minY: 0, minZ: 0, maxX: 0, maxY: 0, maxZ: 0 };
 
   constructor(private readonly colliders: Colliders, private readonly camera: THREE.PerspectiveCamera) {}
@@ -73,7 +75,7 @@ export class PlayerController {
       if (input.down('KeyD')) fx += 1;
     }
     const len = Math.hypot(fx, fz) || 1;
-    const speed = input.down('ShiftLeft') || input.down('ShiftRight') ? P.sprintSpeed : P.walkSpeed;
+    const speed = (input.down('ShiftLeft') || input.down('ShiftRight') ? P.sprintSpeed : P.walkSpeed) * this.speedMul;
     const sin = Math.sin(this.yaw), cos = Math.cos(this.yaw);
     const wishX = ((fx * cos + fz * sin) / len) * speed;
     const wishZ = ((-fx * sin + fz * cos) / len) * speed;

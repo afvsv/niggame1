@@ -75,27 +75,24 @@ export function createSky(scene: THREE.Scene, renderer: THREE.WebGLRenderer): TH
   return sky;
 }
 
-/** Sun with a static shadow map over the barn, hemisphere fill and a warm bounce light by the door. */
+/** Sun with a static shadow map over the barn and a hemisphere fill. The barn adds its own lamps. */
 export function createLights(scene: THREE.Scene, renderer: THREE.WebGLRenderer): THREE.DirectionalLight {
   renderer.shadowMap.enabled = true;
   renderer.shadowMap.type = THREE.PCFShadowMap;
   renderer.shadowMap.autoUpdate = false; // nothing that casts shadows moves; refresh when the stack changes
   renderer.shadowMap.needsUpdate = true;
   const sun = new THREE.DirectionalLight('#ffe2b8', 2.5);
-  sun.position.copy(SUN_DIR).multiplyScalar(40).add(new THREE.Vector3(0, 2, 0));
+  sun.position.copy(SUN_DIR).multiplyScalar(50).add(new THREE.Vector3(0, 2, 0));
   sun.target.position.set(0, 2, 0);
   sun.castShadow = true;
   const sc = sun.shadow.camera;
-  sc.left = -19; sc.right = 19; sc.top = 19; sc.bottom = -19; sc.near = 5; sc.far = 90;
+  sc.left = -27; sc.right = 27; sc.top = 27; sc.bottom = -27; sc.near = 5; sc.far = 100;
   sun.shadow.mapSize.set(2048, 2048);
   sun.shadow.bias = -0.0004;
   sun.shadow.normalBias = 0.035;
   sun.shadow.radius = 2.5;
   scene.add(sun, sun.target);
   scene.add(new THREE.HemisphereLight('#e6dcc8', '#7a5c38', 1.05));
-  const bounce = new THREE.PointLight('#ffd6a0', 50, 32, 1.5);
-  bounce.position.set(0, 2.2, 7.5);
-  scene.add(bounce);
   scene.environmentIntensity = 0.28;
   return sun;
 }
