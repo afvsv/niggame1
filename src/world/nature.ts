@@ -12,6 +12,8 @@ const FENCE = { minX: -24, maxX: 24, minZ: -22, maxZ: 36 };
 /** Outside the barn: meadow, swaying grass, fence, trees, round bales and distant hills. */
 export class Nature {
   readonly group = new THREE.Group();
+  /** Grass patches, for the quality settings. */
+  readonly grassPatches: THREE.InstancedMesh[] = [];
   private readonly time = { value: 0 };
 
   constructor(tex: Textures, colliders: Colliders, beamMat: THREE.Material, hayMat: THREE.Material) {
@@ -101,6 +103,7 @@ transformed.xz += vec2(0.7, 0.35) * sway * 0.05 * position.y * position.y * 16.0
       mesh.computeBoundingSphere();
       mesh.receiveShadow = true;
       group.add(mesh);
+      this.grassPatches.push(mesh);
     }
     return group;
   }
