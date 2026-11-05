@@ -114,4 +114,43 @@ export class Audio {
     const notes = size > 0.6 ? [988, 1319, 1760] : [988, 1319];
     notes.forEach((f, i) => this.tone(f, t + i * 0.07, 0.35, 0.18));
   }
+
+  /** Metal detector beep: higher as the signal grows. */
+  beep(strength: number): void {
+    if (!this.ctx) return;
+    this.tone(700 + strength * 900, this.ctx.currentTime, 0.06, 0.1 + strength * 0.08, 'square');
+  }
+
+  /** A container set down or picked up. */
+  place(): void {
+    if (!this.ctx || !this.noise) return;
+    const t = this.ctx.currentTime;
+    this.tone(220, t, 0.1, 0.18, 'sine', 120);
+    this.click(t, 900, 0.2, 0.05);
+  }
+
+  /** Hay poured into a container. */
+  pour(amount: number): void {
+    this.rustle(1.2);
+    if (amount > 30) setTimeout(() => this.rustle(0.9), 90);
+  }
+
+  /** Needle found: a bright arpeggio with a shimmer. */
+  needle(): void {
+    if (!this.ctx) return;
+    const t = this.ctx.currentTime;
+    [1047, 1319, 1568, 2093].forEach((f, i) => this.tone(f, t + i * 0.08, 0.5, 0.15));
+    this.tone(3136, t + 0.34, 0.8, 0.05, 'sine');
+  }
+
+  /** The padlock drops and the doors creak open. */
+  doorOpen(): void {
+    if (!this.ctx || !this.noise) return;
+    const t = this.ctx.currentTime;
+    this.click(t, 3000, 0.4, 0.06);
+    this.tone(180, t + 0.6, 0.25, 0.4, 'sine', 70);
+    this.click(t + 0.6, 600, 0.35, 0.12);
+    this.tone(95, t + 1.4, 2.2, 0.08, 'sawtooth', 70);
+    [523, 659, 784, 1047].forEach((f, i) => this.tone(f, t + 1.2 + i * 0.12, 0.7, 0.14));
+  }
 }
