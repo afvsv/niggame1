@@ -12,6 +12,8 @@ export class PlayerController {
   yaw = 0;
   pitch = 0;
   onGround = false;
+  /** Multiplier from the settings. */
+  sensitivity = 1;
   private readonly box: AABB = { minX: 0, minY: 0, minZ: 0, maxX: 0, maxY: 0, maxZ: 0 };
 
   constructor(private readonly colliders: Colliders, private readonly camera: THREE.PerspectiveCamera) {}
@@ -59,8 +61,8 @@ export class PlayerController {
 
   update(dt: number, input: Input): void {
     if (input.locked) {
-      this.yaw -= input.mouseDX * P.mouseSensitivity;
-      this.pitch -= input.mouseDY * P.mouseSensitivity;
+      this.yaw -= input.mouseDX * P.mouseSensitivity * this.sensitivity;
+      this.pitch -= input.mouseDY * P.mouseSensitivity * this.sensitivity;
       this.pitch = Math.max(-1.55, Math.min(1.55, this.pitch));
     }
     let fx = 0, fz = 0;
