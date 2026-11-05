@@ -1,210 +1,37 @@
 import * as THREE from 'three';
-import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
-import { Colliders } from './colliders';
+import { AABB, Colliders } from './colliders';
 import { t } from '../core/i18n';
-import { SHOP_ITEMS } from '../data/tools';
 import { NEEDLES, NeedleId } from '../data/needles';
-import { needleName, needlePerk } from '../ui/needleText';
 import { buildModel } from '../tools/models';
 import { BALANCE } from '../data/balance';
 import { Textures } from '../gfx/assets';
 import { mulberry32 } from '../gfx/noise';
 import { PBRSet } from '../gfx/pbr';
 import { triplanarMaterial } from '../gfx/triplanar';
-import { BeamSource, Sunbeams } from '../fx/sunbeams';
+import { Sunbeams } from '../fx/sunbeams';
 import { floorStraws } from './straws';
-import { BARN, Nature } from './nature';
+import { BARN, EXIT, Nature } from './nature';
 import { SUN_DIR } from './sky';
-import { scaleUV, timber } from './geo';
-
-const FONT = '"Roboto Condensed Variable", "Arial Narrow", sans-serif';
-
-/** Dark weathered plank sign with light uppercase lettering. */
-function signTexture(text: string): THREE.CanvasTexture {
-  const c = document.createElement('canvas');
-  c.width = 512; c.height = 128;
-  const ctx = c.getContext('2d')!;
-  ctx.fillStyle = '#2e241b';
-  ctx.fillRect(0, 0, 512, 128);
-  for (let i = 0; i < 90; i++) {
-    ctx.fillStyle = `rgba(${Math.random() < 0.5 ? '0,0,0' : '255,235,200'},${Math.random() * 0.06})`;
-    ctx.fillRect(0, Math.random() * 128, 512, 1 + Math.random() * 2);
-  }
-  ctx.strokeStyle = 'rgba(239,233,218,.55)';
-  ctx.lineWidth = 3;
-  ctx.strokeRect(10, 10, 492, 108);
-  ctx.fillStyle = '#efe9da';
-  ctx.font = `700 64px ${FONT}`;
-  ctx.textAlign = 'center';
-  ctx.textBaseline = 'middle';
-  ctx.fillText(text.toUpperCase(), 256, 68);
-  const tex = new THREE.CanvasTexture(c);
-  tex.colorSpace = THREE.SRGBColorSpace;
-  tex.anisotropy = 4;
-  return tex;
-}
-
-/** Chalk A-frame with the current price per strand. */
-function priceTexture(): THREE.CanvasTexture {
-  const W = 256, H = 384;
-  const c = document.createElement('canvas');
-  c.width = W; c.height = H;
-  const ctx = c.getContext('2d')!;
-  ctx.fillStyle = '#22272a';
-  ctx.fillRect(0, 0, W, H);
-  for (let i = 0; i < 500; i++) {
-    ctx.fillStyle = `rgba(236,230,211,${Math.random() * 0.05})`;
-    ctx.fillRect(Math.random() * W, Math.random() * H, 2 + Math.random() * 10, 1 + Math.random() * 2);
-  }
-  ctx.fillStyle = '#ece6d3';
-  ctx.textAlign = 'center';
-  ctx.textBaseline = 'middle';
-  ctx.font = `700 64px ${FONT}`;
-  ctx.fillText(`$${BALANCE.hay.pricePerStrand.toFixed(2)}`, W / 2, H / 2 - 30);
-  ctx.font = `700 30px ${FONT}`;
-  ctx.fillText(t('counter.price').toUpperCase(), W / 2, H / 2 + 30);
-  const tex = new THREE.CanvasTexture(c);
-  tex.colorSpace = THREE.SRGBColorSpace;
-  tex.anisotropy = 4;
-  return tex;
-}
-
-/** Chalkboard with pinned paper price tags: the supply board. */
-function boardTexture(): THREE.CanvasTexture {
-  const W = 1024, H = 640;
-  const c = document.createElement('canvas');
-  c.width = W; c.height = H;
-  const ctx = c.getContext('2d')!;
-  ctx.fillStyle = '#5b3d24';
-  ctx.fillRect(0, 0, W, H);
-  ctx.fillStyle = '#2f3a33';
-  ctx.fillRect(28, 28, W - 56, H - 56);
-  for (let i = 0; i < 1600; i++) { // chalk dust
-    ctx.fillStyle = `rgba(236,230,211,${Math.random() * 0.06})`;
-    ctx.fillRect(28 + Math.random() * (W - 56), 28 + Math.random() * (H - 56), 2 + Math.random() * 14, 1 + Math.random() * 2);
-  }
-  ctx.fillStyle = '#ece6d3';
-  ctx.font = `700 96px ${FONT}`;
-  ctx.textAlign = 'center';
-  ctx.textBaseline = 'middle';
-  ctx.fillText(t('shop.sign').toUpperCase(), W / 2, 130);
-  ctx.fillRect(W / 2 - 220, 196, 440, 4);
-  SHOP_ITEMS.slice(0, 3).forEach((item, i) => {
-    ctx.save();
-    ctx.translate(200 + i * 312, 410);
-    ctx.rotate((i - 1) * 0.06 + (i === 1 ? 0.03 : -0.02));
-    ctx.fillStyle = 'rgba(0,0,0,.25)';
-    ctx.fillRect(-128, -84, 268, 180);
-    ctx.fillStyle = '#efe3c2';
-    ctx.fillRect(-134, -92, 268, 180);
-    ctx.fillStyle = '#2b241b';
-    const name = t(`item.${item.id}`);
-    let size = 30;
-    do ctx.font = `500 ${size}px ${FONT}`; while (ctx.measureText(name).width > 236 && --size > 16);
-    ctx.fillText(name, 0, -36);
-    ctx.font = `700 64px ${FONT}`;
-    ctx.fillText(`$${item.price}`, 0, 34);
-    ctx.fillStyle = '#b5523b';
-    ctx.beginPath();
-    ctx.arc(0, -78, 9, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.restore();
-  });
-  const tex = new THREE.CanvasTexture(c);
-  tex.colorSpace = THREE.SRGBColorSpace;
-  tex.anisotropy = 4;
-  return tex;
-}
-
-/** Needle board by the exit: six framed slots, filled in as needles are found. */
-function needleBoard(): { tex: THREE.CanvasTexture; draw(found: readonly NeedleId[]): void } {
-  const W = 1024, H = 680;
-  const c = document.createElement('canvas');
-  c.width = W; c.height = H;
-  const ctx = c.getContext('2d')!;
-  const tex = new THREE.CanvasTexture(c);
-  tex.colorSpace = THREE.SRGBColorSpace;
-  tex.anisotropy = 4;
-  const rnd = mulberry32(31);
-  const dust = Array.from({ length: 1400 }, () => [rnd() * W, rnd() * H, 2 + rnd() * 14, 1 + rnd() * 2, rnd() * 0.06]);
-  const drawNeedle = (id: NeedleId, x: number, y: number, ok: boolean) => {
-    ctx.save();
-    ctx.translate(x, y);
-    ctx.rotate(-0.5);
-    ctx.strokeStyle = ok ? '#e8edf0' : 'rgba(236,230,211,.18)';
-    ctx.fillStyle = ok ? (id === 'desk_pin' ? '#c8382c' : id === 'hat_pin' ? '#f2e6d8' : '#e8edf0') : 'rgba(236,230,211,.18)';
-    ctx.lineCap = 'round';
-    ctx.lineWidth = id === 'darning' ? 7 : 5;
-    ctx.beginPath();
-    if (id === 'bent_pin') { ctx.moveTo(-60, 0); ctx.lineTo(20, 0); ctx.lineTo(60, -22); }
-    else if (id === 'safety_pin') { ctx.moveTo(60, -6); ctx.lineTo(-50, -6); ctx.arc(-50, 4, 10, -Math.PI / 2, Math.PI / 2, true); ctx.lineTo(60, 14); }
-    else if (id === 'desk_pin') { ctx.moveTo(0, 0); ctx.lineTo(40, 0); }
-    else { ctx.moveTo(-70, 0); ctx.lineTo(70, 0); }
-    ctx.stroke();
-    ctx.beginPath();
-    if (id === 'bent_pin') ctx.arc(-62, 0, 9, 0, Math.PI * 2);
-    else if (id === 'desk_pin') ctx.ellipse(-4, 0, 10, 30, 0, 0, Math.PI * 2);
-    else if (id === 'hat_pin') ctx.arc(-72, 0, 16, 0, Math.PI * 2);
-    else if (id === 'safety_pin') ctx.rect(56, -12, 18, 30);
-    if (id !== 'sewing' && id !== 'darning') ctx.fill();
-    else { ctx.lineWidth = 3; ctx.ellipse(-62, 0, 7, 3, 0, 0, Math.PI * 2); ctx.stroke(); }
-    ctx.restore();
-  };
-  const draw = (found: readonly NeedleId[]) => {
-    ctx.fillStyle = '#4a311d';
-    ctx.fillRect(0, 0, W, H);
-    ctx.fillStyle = '#262d29';
-    ctx.fillRect(24, 24, W - 48, H - 48);
-    for (const [x, y, w, h, a] of dust) { ctx.fillStyle = `rgba(236,230,211,${a})`; ctx.fillRect(x, y, w, h); }
-    ctx.textAlign = 'center';
-    ctx.textBaseline = 'middle';
-    const open = found.length >= NEEDLES.length;
-    ctx.fillStyle = open ? '#9fcf6b' : '#ece6d3';
-    ctx.font = `700 66px ${FONT}`;
-    ctx.fillText(t(open ? 'board.open' : 'board.locked').toUpperCase(), W / 2, 92);
-    ctx.font = `600 34px ${FONT}`;
-    ctx.fillStyle = '#c9c2ab';
-    ctx.fillText(t('board.sub', { n: found.length, total: NEEDLES.length }), W / 2, 150);
-    NEEDLES.forEach((n, i) => {
-      const col = i % 3, row = Math.floor(i / 3);
-      const x = 60 + col * 304, y = 196 + row * 228;
-      const ok = found.includes(n.id);
-      ctx.strokeStyle = ok ? '#d4ac3f' : 'rgba(236,230,211,.3)';
-      ctx.lineWidth = 3;
-      ctx.setLineDash(ok ? [] : [10, 8]);
-      ctx.strokeRect(x, y, 280, 206);
-      ctx.setLineDash([]);
-      drawNeedle(n.id, x + 140, y + 74, ok);
-      ctx.fillStyle = ok ? '#ece6d3' : 'rgba(236,230,211,.35)';
-      ctx.font = `700 30px ${FONT}`;
-      ctx.fillText(ok ? needleName(n.id) : '?', x + 140, y + 148);
-      if (ok) {
-        ctx.font = `500 24px ${FONT}`;
-        ctx.fillStyle = '#9fcf6b';
-        ctx.fillText(needlePerk(n.id), x + 140, y + 184);
-      }
-    });
-    tex.needsUpdate = true;
-  };
-  draw([]);
-  return { tex, draw };
-}
+import { timber } from './geo';
+import { Kit, prism, projectUV, tube, worldBox } from './kit';
+import { Mats, aFrame, bale, bollard, fernPot, hitPane, sellBooth, shadowed, storageShed, supplyStall, tripod } from './booths';
+import { hazardTexture, ledClock, needleBoard, plateTexture, priceTexture } from './signs';
 
 export interface Shed {
   group: THREE.Group;
-  counter: THREE.Object3D; // ray target for selling
-  shop: THREE.Object3D; // ray target for the supply board
-  door: THREE.Object3D; // the exit doors, lock and bar
+  counter: THREE.Object3D; // ray target for selling: the kiosk and its conveyor
+  shop: THREE.Object3D; // ray target for the supply stall
+  door: THREE.Object3D; // the roll-up exit door and its lock
   board: THREE.Object3D; // the needle board by the exit
   counterTop: THREE.Vector3;
   spawn: THREE.Vector3;
   spawnYaw: number;
-  /** Past this z the player has left the barn. */
-  exitZ: number;
+  /** True once the player has walked out through the exit. */
+  exited(x: number, z: number): boolean;
   inside(x: number, z: number): boolean;
   /** Shows found needles on the board. */
   setNeedles(found: readonly NeedleId[]): void;
-  /** Drops the lock and swings the doors open; `instant` for loading an opened barn. */
+  /** Drops the lock and rolls the door up; `instant` for loading an opened hangar. */
   unlock(instant?: boolean): void;
   /** Returns true while something that casts shadows is moving. */
   update(dt: number): boolean;
@@ -212,524 +39,327 @@ export interface Shed {
   quality: { grass: THREE.InstancedMesh[]; floorStraws: THREE.InstancedMesh; beams: THREE.Object3D };
 }
 
-const HX = BARN.hx, HZ = BARN.hz; // barn half-sizes, metres
-const WALL_H = 10; // eaves
-const RIDGE = WALL_H + 6;
-const DOOR_W = 4.2; // half width of the exit
-const DOOR_H = 7;
-const OVER = 0.7; // roof overhang
-const BAYS = [-HZ + 0.2, -12.67, -6.33, 0, 6.33, 12.67, HZ - 0.2]; // truss positions along z
-const AISLE = 10.5; // x of the inner post rows
-const WINDOWS = [-12, -4, 4, 12]; // z of the high windows in the sunny (+x) wall
-const WIN = { y0: 5.8, y1: 7.6, w: 1.8 };
-const LOFT = { z: -HZ + 5, y: 4.6 };
+// The hangar, after the reference: an open-topped yard with tall plank walls on a concrete plinth,
+// lean-to tin roofs along both long walls and bare steel arches over the middle. The exit is a roll-up
+// door in the +x wall; the selling kiosk stands in the far corner of that wall, the supply stall near the door.
+const HX = BARN.hx, HZ = BARN.hz; // half-sizes, metres
+const WALL_H = 9; // long walls: posts and plate
+const SIDING_TOP = 9.3;
+const END_H = 7.5; // end walls under the open middle
+const BASE_H = 1.5; // concrete plinth
+const IN = HX - 5.5; // inner post rows = inner edge of the roofs
+const SLOPE = 0.235; // the roofs rise towards the walls
+const rafterY = (ax: number) => 7.9 + (ax - IN) * SLOPE; // rafter centre line at |x| = ax
+const BAYS = [-16.5, -11, -5.5, 0, 5.5, 11, 16.5];
+const FRAMES = [-(HZ - 0.3), ...BAYS, HZ - 0.3];
+const PX = HX - 0.3; // wall posts
+const DOOR_H = 5;
+const D0 = EXIT.z - EXIT.halfW, D1 = EXIT.z + EXIT.halfW, DW = D1 - D0;
 
 function pbr(set: PBRSet, extra: THREE.MeshStandardMaterialParameters = {}): THREE.MeshStandardMaterial {
   return new THREE.MeshStandardMaterial({ map: set.map, normalMap: set.normalMap, roughnessMap: set.roughnessMap, roughness: 1, metalness: 0, ...extra });
 }
 
-/** Plank walls: interior is bare weathered wood, the outside is faded barn red. Gaps let sunlight through. */
-function wallMaterial(set: PBRSet): THREE.MeshStandardMaterial {
-  const m = pbr(set, { side: THREE.DoubleSide, alphaTest: 0.5, alphaToCoverage: true });
-  m.onBeforeCompile = (sh) => {
-    sh.fragmentShader = sh.fragmentShader.replace('#include <map_fragment>', `#include <map_fragment>
-if (!gl_FrontFacing) diffuseColor.rgb = mix(diffuseColor.rgb, diffuseColor.rgb * vec3(2.1, 0.62, 0.5), 0.85);`);
-  };
-  return m;
-}
-
-/** A wall from an outline (x across, y up) with optional rectangular openings, UVs in 2 m tiles. Front faces +z. */
-function wallShape(outline: Array<[number, number]>, holes: Array<[number, number, number, number]>, mat: THREE.Material): THREE.Mesh {
-  const shape = new THREE.Shape(outline.map(([x, y]) => new THREE.Vector2(x, y)));
-  for (const [x0, y0, x1, y1] of holes) shape.holes.push(new THREE.Path([new THREE.Vector2(x0, y0), new THREE.Vector2(x0, y1), new THREE.Vector2(x1, y1), new THREE.Vector2(x1, y0)]));
-  const m = new THREE.Mesh(scaleUV(new THREE.ShapeGeometry(shape), 0.5, 0.5), mat);
-  m.castShadow = true;
-  m.receiveShadow = true;
-  return m;
-}
-const rect = (x0: number, x1: number, h: number): Array<[number, number]> => [[x0, 0], [x1, 0], [x1, h], [x0, h]];
-
-/** Hanging enamel lamp with a warm bulb; returns the group and the light position. */
-function lamp(x: number, y: number, z: number, cord: number, beamMat: THREE.Material): THREE.Group {
-  const g = new THREE.Group();
-  g.position.set(x, y, z);
-  const shadeMat = new THREE.MeshStandardMaterial({ color: '#2f4a3a', roughness: 0.45, metalness: 0.3, side: THREE.DoubleSide });
-  const inner = new THREE.MeshStandardMaterial({ color: '#f3efe2', roughness: 0.5, emissive: '#ffd9a0', emissiveIntensity: 0.25, side: THREE.BackSide });
-  const cordM = new THREE.Mesh(new THREE.CylinderGeometry(0.012, 0.012, cord, 5), beamMat);
-  cordM.position.y = -cord / 2;
-  const prof = [[0.05, 0], [0.08, -0.06], [0.2, -0.2], [0.32, -0.3]].map(([a, b]) => new THREE.Vector2(a, b));
-  const shade = new THREE.Mesh(new THREE.LatheGeometry(prof, 24), shadeMat);
-  const shadeIn = new THREE.Mesh(new THREE.LatheGeometry(prof, 24), inner);
-  shade.position.y = shadeIn.position.y = -cord;
-  const bulb = new THREE.Mesh(new THREE.SphereGeometry(0.07, 14, 10), new THREE.MeshStandardMaterial({ color: '#fff2d0', emissive: '#ffd08a', emissiveIntensity: 3 }));
-  bulb.position.y = -cord - 0.17;
-  const light = new THREE.PointLight('#ffcf8f', 46, 26, 1.5);
-  light.position.y = -cord - 0.3;
-  g.add(cordM, shade, shadeIn, bulb, light);
-  return g;
-}
-
-/** Builds the barn the player is locked in: the stack, the counter, supplies, the exit and the yard outside. */
+/** Builds the hangar the player is locked in: walls and roofs, the kiosk, the stall, the exit and the land outside. */
 export function buildShed(scene: THREE.Scene, colliders: Colliders, tex: Textures, hayMat: THREE.Material): Shed {
   const group = new THREE.Group();
   scene.add(group);
-  const beamMat = pbr(tex.beam);
-  const boardMat = pbr(tex.boards);
-  const wallMat = wallMaterial(tex.planks);
-  const iron = new THREE.MeshStandardMaterial({ color: '#3b3a38', roughness: 0.55, metalness: 0.75 });
-  const shadowed = <T extends THREE.Mesh>(m: T) => { m.castShadow = true; m.receiveShadow = true; return m; };
-  const box = (b: { minX: number; maxX: number; minY: number; maxY: number; minZ: number; maxZ: number }) => { colliders.addBox(b); return b; };
+  const box = (b: AABB) => { colliders.addBox(b); return b; };
+  const m: Mats = {
+    beam: pbr(tex.beam, { color: '#857565' }),
+    boards: pbr(tex.boards),
+    metal: pbr(tex.metal, { metalness: 0.5 }),
+    iron: new THREE.MeshStandardMaterial({ color: '#3b3a38', roughness: 0.55, metalness: 0.75 }),
+    steel: new THREE.MeshStandardMaterial({ color: '#5d6d74', roughness: 0.5, metalness: 0.55 }),
+    rubber: new THREE.MeshStandardMaterial({ color: '#1f1f1e', roughness: 0.92 }),
+    hay: hayMat,
+    yellow: new THREE.MeshStandardMaterial({ color: '#d9a51c', roughness: 0.55, metalness: 0.15 }),
+    black: new THREE.MeshStandardMaterial({ color: '#1a1917', roughness: 0.6 }),
+    red: new THREE.MeshStandardMaterial({ color: '#97302a', roughness: 0.7 }),
+    burlap: new THREE.MeshStandardMaterial({ color: '#a08660', roughness: 1 }),
+    leaf: new THREE.MeshStandardMaterial({ color: '#4f6d36', roughness: 0.8, side: THREE.DoubleSide }),
+  };
+  const siding = pbr(tex.siding);
+  const concrete = pbr(tex.concrete);
+  const archMat = new THREE.MeshStandardMaterial({ color: '#c9cdcd', roughness: 0.45, metalness: 0.35 });
 
-  // Floor: packed dirt.
+  // Floor: light packed sand.
   const floor = new THREE.Mesh(
     new THREE.PlaneGeometry(2 * HX, 2 * HZ).rotateX(-Math.PI / 2),
-    triplanarMaterial({ set: tex.dirt, tile: 3, variation: tex.variation, variationTile: 11, brightness: 0.45, tint: '#c9a35a', tintAmount: 0.6, topOnly: true }),
+    triplanarMaterial({ set: tex.sand, tile: 3, variation: tex.variation, variationTile: 11, brightness: 0.35, tint: '#c9ab7c', tintAmount: 0.35, topOnly: true }),
   );
   floor.position.y = 0.01;
   floor.receiveShadow = true;
   group.add(floor);
 
-  // Walls. Shapes face the interior; colliders are 0.3 m slabs reaching above the roof line.
-  const back = wallShape(rect(-HX, HX, WALL_H), [], wallMat);
-  back.position.set(0, 0, -HZ);
-  const left = wallShape(rect(-HZ, HZ, WALL_H), [], wallMat);
-  left.position.set(-HX, 0, 0);
-  left.rotation.y = Math.PI / 2;
-  const right = wallShape(rect(-HZ, HZ, WALL_H), WINDOWS.map((z) => [z - WIN.w / 2, WIN.y0, z + WIN.w / 2, WIN.y1]), wallMat);
-  right.position.set(HX, 0, 0);
-  right.rotation.y = -Math.PI / 2; // local x runs along world +z
-  const front = wallShape([[-HX, 0], [-DOOR_W, 0], [-DOOR_W, DOOR_H], [DOOR_W, DOOR_H], [DOOR_W, 0], [HX, 0], [HX, WALL_H], [-HX, WALL_H]], [], wallMat);
-  front.position.set(0, 0, HZ);
-  front.rotation.y = Math.PI;
-  const gh = RIDGE - WALL_H;
-  const gableWin: [number, number, number, number] = [-0.9, gh * 0.3, 0.9, gh * 0.3 + 1.6];
-  const gBack = wallShape([[-HX, 0], [HX, 0], [0, gh]], [gableWin], wallMat);
-  gBack.position.set(0, WALL_H, -HZ);
-  const gFront = wallShape([[-HX, 0], [HX, 0], [0, gh]], [gableWin], wallMat);
-  gFront.position.set(0, WALL_H, HZ);
-  gFront.rotation.y = Math.PI;
-  group.add(back, left, right, front, gBack, gFront);
-  const slab = (minX: number, maxX: number, minZ: number, maxZ: number) => box({ minX, maxX, minY: 0, maxY: RIDGE + 2, minZ, maxZ });
-  slab(-HX, HX, -HZ - 0.15, -HZ + 0.15);
-  slab(-HX - 0.15, -HX + 0.15, -HZ, HZ);
-  slab(HX - 0.15, HX + 0.15, -HZ, HZ);
-  slab(-HX, -DOOR_W, HZ - 0.15, HZ + 0.15);
-  slab(DOOR_W, HX, HZ - 0.15, HZ + 0.15);
-  const doorBlock = box({ minX: -DOOR_W, maxX: DOOR_W, minY: 0, maxY: RIDGE + 2, minZ: HZ - 0.4, maxZ: HZ + 0.15 });
-
-  // Timber frame, merged into one mesh.
+  const shell = new Kit();
   const tim: THREE.BufferGeometry[] = [];
-  const P = 0.34, IN = HX - 0.2;
-  const post = (x: number, z: number, h = WALL_H, p = P) => {
+  const post = (x: number, z: number, h: number, p = 0.3) => {
     tim.push(timber(p, h, p, x, h / 2, z));
     box({ minX: x - p / 2, maxX: x + p / 2, minY: 0, maxY: h, minZ: z - p / 2, maxZ: z + p / 2 });
   };
-  for (const z of BAYS) post(-IN, z), post(IN, z);
-  for (const z of BAYS.slice(1, -1)) if (z > LOFT.z + 0.5) post(-AISLE, z), post(AISLE, z);
-  for (const x of [-AISLE, -5.25, 0, 5.25, AISLE]) post(x, -HZ + 0.2);
-  for (const x of [-AISLE, -DOOR_W - 0.22, DOOR_W + 0.22, AISLE]) post(x, HZ - 0.2);
-  // Girts on the walls, plates on the posts, the door frame.
-  for (const side of [-1, 1]) {
-    const x = side * (HX - 0.12);
-    for (const y of [3.3, 5.4]) tim.push(timber(0.14, 0.24, 2 * HZ, x, y, 0));
-    tim.push(timber(0.3, 0.3, 2 * HZ, side * IN, WALL_H - 0.15, 0)); // wall plate
-    tim.push(timber(0.3, 0.34, 2 * 12.67 + 0.4, side * AISLE, WALL_H - 0.17, 0)); // aisle plate
-  }
-  for (const y of [3.3, 5.4]) {
-    tim.push(timber(2 * HX, 0.24, 0.14, 0, y, -HZ + 0.12));
-    for (const sx of [-1, 1]) tim.push(timber(HX - DOOR_W - 0.4, 0.24, 0.14, sx * (HX + DOOR_W + 0.4) / 2, y, HZ - 0.12));
-  }
-  tim.push(timber(2 * DOOR_W + 1, 0.4, 0.34, 0, DOOR_H + 0.2, HZ - 0.2)); // door header
-  // Trusses: tie beams where the stack is low, collar ties above it everywhere.
-  const pitch = Math.atan2(gh, HX);
-  const rafterLen = Math.hypot(HX + OVER, gh * (1 + OVER / HX));
-  const roofY = (x: number) => RIDGE - Math.abs(x) * Math.tan(pitch);
-  const collarY = WALL_H + 3.4, collarHalf = (RIDGE - collarY) / Math.tan(pitch);
-  for (const z of BAYS) {
-    const end = Math.abs(z) > HZ - 1;
-    if (Math.abs(z) >= 6) {
-      tim.push(timber(2 * HX, 0.36, 0.3, 0, WALL_H - 0.1, z)); // tie beam
-      tim.push(timber(0.26, gh, 0.26, 0, (WALL_H + RIDGE) / 2, z)); // king post
-      for (const s of [-1, 1]) { // struts from the king post to the rafters
-        const sx = s * HX * 0.45, sy = roofY(sx) - 0.3;
-        tim.push(timber(Math.hypot(sx, sy - WALL_H), 0.18, 0.16, sx / 2, (sy + WALL_H) / 2, z, 1.2, 0, 0, Math.atan2(sy - WALL_H, sx)));
-      }
-    }
-    if (!end) tim.push(timber(2 * collarHalf, 0.28, 0.24, 0, collarY, z));
-    // Knee braces between the aisle posts and the plate.
-    if (!end && z > LOFT.z + 0.5) for (const s of [-1, 1]) for (const d of [-1, 1]) tim.push(timber(0.14, 1.9, 0.14, s * AISLE, WALL_H - 1.0, z + d * 0.62, 1.2, d * 0.72, 0, 0));
-  }
-  for (let i = 0; i <= 12; i++) {
-    const z = -HZ + 0.2 + (i / 12) * (2 * HZ - 0.4);
-    for (const side of [-1, 1]) {
-      const cx = side * (HX + OVER) / 2, cy = RIDGE - gh * ((HX + OVER) / HX) / 2 - 0.16;
-      tim.push(timber(rafterLen, 0.26, 0.16, cx, cy, z, 1.2, 0, 0, -side * pitch));
+
+  // Long walls: a concrete plinth, dark siding above. The +x wall has the exit.
+  for (const s of [-1, 1]) {
+    const x = s * HX;
+    const spans: Array<[number, number]> = s > 0 ? [[-HZ, D0], [D1, HZ]] : [[-HZ, HZ]];
+    for (const [z0, z1] of spans) {
+      const zc = (z0 + z1) / 2, len = z1 - z0;
+      shell.add(concrete, worldBox(0.3, BASE_H, len, x, BASE_H / 2, zc, 2));
+      shell.add(siding, worldBox(0.14, SIDING_TOP - BASE_H, len, x, (SIDING_TOP + BASE_H) / 2, zc, 2.4));
+      box({ minX: x - 0.2, maxX: x + 0.2, minY: 0, maxY: 14, minZ: z0, maxZ: z1 });
     }
   }
-  for (const side of [-1, 1]) for (const f of [0.3, 0.62]) { // purlins
-    const x = side * HX * f;
-    tim.push(timber(0.2, 0.2, 2 * HZ + 2 * OVER, x, roofY(x) - 0.38, 0, 1.2, 0, 0, -side * pitch));
+  shell.add(siding, worldBox(0.14, SIDING_TOP - DOOR_H, DW, HX, (SIDING_TOP + DOOR_H) / 2, EXIT.z, 2.4));
+  // End walls: lower and open above the middle; under the roofs the siding follows the roof line.
+  const under = (ax: number) => rafterY(ax) + 0.2;
+  const E = HX - 0.07;
+  const endOutline: Array<[number, number]> = [[-E, BASE_H], [E, BASE_H], [E, under(E)], [IN, under(IN)], [IN, END_H], [-IN, END_H], [-IN, under(IN)], [-E, under(E)]];
+  for (const s of [-1, 1]) {
+    const z = s * HZ;
+    shell.add(concrete, worldBox(2 * HX - 0.3, BASE_H, 0.3, 0, BASE_H / 2, z, 2));
+    shell.add(siding, projectUV(prism(endOutline, 0.14).translate(0, 0, z), 2.4));
+    box({ minX: -HX, maxX: HX, minY: 0, maxY: 14, minZ: z - 0.2, maxZ: z + 0.2 });
+    for (const x of [-4.75, 0, 4.75]) post(x, s * (HZ - 0.3), END_H);
+    tim.push(timber(2 * IN, 0.24, 0.32, 0, END_H - 0.12, s * (HZ - 0.3))); // top rail
   }
-  tim.push(timber(0.28, 0.32, 2 * HZ + 2 * OVER, 0, RIDGE - 0.22, 0)); // ridge beam
-  // High window frames with a cross.
-  for (const z of WINDOWS) {
-    const x = HX - 0.1, w = WIN.w, h = WIN.y1 - WIN.y0, yc = (WIN.y0 + WIN.y1) / 2;
-    tim.push(timber(0.2, 0.14, w + 0.3, x, WIN.y0 - 0.07, z), timber(0.2, 0.14, w + 0.3, x, WIN.y1 + 0.07, z));
-    tim.push(timber(0.2, h, 0.14, x, yc, z - w / 2 - 0.07), timber(0.2, h, 0.14, x, yc, z + w / 2 + 0.07));
-    tim.push(timber(0.08, h, 0.08, x, yc, z), timber(0.08, 0.08, w, x, yc, z));
-  }
-  // Hayloft along the back wall: deck, joists, railing and a ladder.
-  const lw = 2 * HX - 0.4, ld = LOFT.z + HZ;
-  for (let x = -HX + 1.6; x < HX - 1; x += 4.2) post(x, LOFT.z, LOFT.y, 0.26);
-  tim.push(timber(lw, 0.3, 0.26, 0, LOFT.y - 0.15, LOFT.z));
-  for (let x = -HX + 0.6; x < HX; x += 1.4) tim.push(timber(0.12, 0.2, ld, x, LOFT.y - 0.24, -HZ + ld / 2));
-  for (let x = -HX + 1.6; x < HX - 1; x += 2.1) tim.push(timber(0.1, 1.0, 0.1, x, LOFT.y + 0.56, LOFT.z + 0.1));
-  tim.push(timber(lw, 0.12, 0.1, 0, LOFT.y + 1.05, LOFT.z + 0.1), timber(lw, 0.08, 0.06, 0, LOFT.y + 0.55, LOFT.z + 0.1));
-  const ladX = 7.5;
-  for (const dx of [-0.26, 0.26]) tim.push(timber(0.08, 5.4, 0.1, ladX + dx, 2.65, LOFT.z + 0.7, 1.2, -0.2, 0, 0));
-  for (let i = 0; i < 15; i++) {
-    const y = 0.3 + i * 0.34;
-    tim.push(timber(0.56, 0.05, 0.05, ladX, y, LOFT.z + 0.7 + 0.2 * (2.65 - y) / 2.6 + 0.16));
-  }
-  box({ minX: ladX - 0.35, maxX: ladX + 0.35, minY: 0, maxY: 5, minZ: LOFT.z + 0.4, maxZ: LOFT.z + 1.4 });
-  // Stall partitions along the left aisle.
-  const stall: THREE.BufferGeometry[] = [];
-  for (const z of [-6.33, 0, 6.33]) {
-    stall.push(scaleUV(new THREE.BoxGeometry(HX - AISLE - 0.4, 1.5, 0.08), 2.6, 0.75).translate(-(HX + AISLE) / 2, 0.75, z));
-    tim.push(timber(HX - AISLE - 0.3, 0.12, 0.14, -(HX + AISLE) / 2, 1.56, z));
-    box({ minX: -HX, maxX: -AISLE - 0.2, minY: 0, maxY: 1.6, minZ: z - 0.08, maxZ: z + 0.08 });
-  }
-  const loftDeck = scaleUV(new THREE.BoxGeometry(lw, 0.1, ld), lw / 2.4, ld / 2.4).translate(0, LOFT.y + 0.05, -HZ + ld / 2);
-  group.add(shadowed(new THREE.Mesh(mergeGeometries([...stall, loftDeck]), boardMat)));
-  const frame = shadowed(new THREE.Mesh(mergeGeometries(tim), beamMat));
-  group.add(frame);
 
-  // Roof: board strips along z; a few are missing on purpose so sunbeams fall on the stack.
-  const roofTop = new THREE.MeshStandardMaterial({ color: '#5d5f61', roughness: 0.55, metalness: 0.5 });
-  const roofParts: THREE.BufferGeometry[] = [];
-  const holes: BeamSource[] = [];
-  const slope = rafterLen, strips = 16, stripW = (2 * HZ + 2 * OVER) / strips;
-  const holeAt: Record<string, [number, number]> = { '1:9': [3.0, 5.2], '1:5': [5.4, 7.2], '-1:11': [2.2, 3.8], '1:13': [8.0, 9.4] };
-  for (const side of [-1, 1]) {
-    for (let k = 0; k < strips; k++) {
-      const z = -HZ - OVER + stripW * (k + 0.5);
-      const hole = holeAt[`${side}:${k}`];
-      const segs: Array<[number, number]> = hole ? [[0, hole[0]], [hole[1], slope]] : [[0, slope]];
-      for (const [a, b] of segs) {
-        const g = timber(b - a, 0.08, stripW - 0.01, 0, 0, 0, 2);
-        g.translate((a + b) / 2, 0.04, 0);
-        g.rotateZ(-pitch);
-        if (side < 0) g.scale(-1, 1, 1);
-        g.translate(0, RIDGE + 0.02, z);
-        roofParts.push(side < 0 ? flipWinding(g) : g);
-      }
-      if (hole) {
-        const pt = (s: number, dz: number) => new THREE.Vector3(side * Math.cos(pitch) * s, RIDGE - Math.sin(pitch) * s - 0.05, z + dz);
-        const hz = stripW / 2 - 0.02;
-        holes.push({ corners: [pt(hole[0], -hz), pt(hole[1], -hz), pt(hole[1], hz), pt(hole[0], hz)], strength: 0.15 });
-      }
+  // Timber frame: wall posts, inner posts under the roof edge, plates, girts, rafters and purlins.
+  const pitch = Math.atan(SLOPE);
+  for (const s of [-1, 1]) {
+    for (const z of FRAMES) { post(s * PX, z, WALL_H); post(s * IN, z, 7.42); }
+    tim.push(timber(0.3, 0.3, 2 * HZ - 0.3, s * PX, WALL_H - 0.15, 0)); // wall plate
+    tim.push(timber(0.16, 0.22, 2 * HZ - 0.3, s * (HX - 0.15), 5.3, 0)); // girt
+    tim.push(timber(0.3, 0.36, 2 * HZ - 0.3, s * IN, 7.6, 0)); // eave beam
+    for (const z of BAYS) for (const d of [-1, 1]) tim.push(timber(0.12, 1.5, 0.12, s * IN, 6.95, z + d * 0.5, 1.2, d * 0.75, 0, 0)); // knee braces
+    const a0 = IN - 0.35, a1 = HX + 0.4, ac = (a0 + a1) / 2, len = (a1 - a0) / Math.cos(pitch);
+    for (const z of FRAMES) tim.push(timber(len, 0.24, 0.14, s * ac, rafterY(ac), z, 1.2, 0, 0, s * pitch));
+    for (const ax of [IN + 0.3, IN + 2.75, HX - 0.5]) tim.push(timber(0.12, 0.1, 2 * HZ + 0.4, s * ax, rafterY(ax) + 0.17, 0));
+    tim.push(timber(0.05, 0.22, 2 * HZ + 0.6, s * (a0 - 0.02), rafterY(a0) + 0.17, 0)); // fascia
+    // Corrugated sheet over it all, ridges running down the slope.
+    const sheet = new THREE.BoxGeometry(len, 0.03, 2 * HZ + 0.6);
+    const p = sheet.getAttribute('position') as THREE.BufferAttribute, uv = sheet.getAttribute('uv') as THREE.BufferAttribute;
+    for (let i = 0; i < p.count; i++) uv.setXY(i, p.getZ(i) / 1.2, p.getX(i) / 1.2);
+    shell.add(m.metal, sheet.rotateZ(s * pitch).translate(s * ac, rafterY(ac) + 0.235, 0));
+  }
+
+  // Bare steel arches over the open middle, springing from the eave beams.
+  const chord = 2 * IN, sag = 6.2, R = (chord * chord / 4 + sag * sag) / (2 * sag), y0 = rafterY(IN) + 0.12, cy = y0 + sag - R;
+  const half = Math.asin(IN / R);
+  for (const z of FRAMES) {
+    const pts: THREE.Vector3[] = [];
+    for (let i = 0; i <= 24; i++) {
+      const a = -half + (i / 24) * 2 * half;
+      pts.push(new THREE.Vector3(R * Math.sin(a), cy + R * Math.cos(a), z));
     }
+    shell.add(archMat, tube(pts, 0.055, 48, 8));
+    for (const s of [-1, 1]) shell.add(m.iron, new THREE.BoxGeometry(0.34, 0.04, 0.34).translate(s * IN, y0 - 0.1, z));
   }
-  const roofGeo = mergeGeometries(roofParts);
-  const roof = shadowed(new THREE.Mesh(roofGeo, [boardMat, roofTop]));
-  splitRoofGroups(roofGeo);
-  group.add(roof);
-  for (const z of WINDOWS) {
-    const x = HX - 0.05, h = WIN.w / 2;
-    holes.push({ corners: [new THREE.Vector3(x, WIN.y1, z - h), new THREE.Vector3(x, WIN.y1, z + h), new THREE.Vector3(x, WIN.y0, z + h), new THREE.Vector3(x, WIN.y0, z - h)], strength: 0.07 });
+
+  // The exit frame: a header across the wall posts at z = 0 and 5.5, the drum housing above it.
+  tim.push(timber(0.32, 0.3, 5.8, PX, DOOR_H + 0.15, EXIT.z));
+  shell.add(m.beam, ...tim);
+  shell.add(m.steel, worldBox(0.48, 0.6, DW + 0.5, HX - 0.71, DOOR_H + 0.32, EXIT.z, 1.2));
+  for (const z of [D0 + 0.05, D1 - 0.05]) shell.add(m.steel, new THREE.BoxGeometry(0.12, DOOR_H, 0.1).translate(HX - 0.1, DOOR_H / 2, z)); // guide rails
+  shell.place(group, box, 0, 0);
+
+  // Hazard stripes on the jambs, the exit plate, two lamps and the red clock above.
+  const hazard = hazardTexture();
+  hazard.repeat.set(1, 5);
+  const hazardMat = new THREE.MeshStandardMaterial({ map: hazard, roughness: 0.6 });
+  for (const [z, face] of [[0, 1], [5.5, -1]] as const) {
+    const front = new THREE.Mesh(new THREE.PlaneGeometry(0.3, 1.5).rotateY(-Math.PI / 2), hazardMat);
+    front.position.set(PX - 0.155, 0.75, z);
+    const side = new THREE.Mesh(new THREE.PlaneGeometry(0.3, 1.5).rotateY(face > 0 ? 0 : Math.PI), hazardMat);
+    side.position.set(PX, 0.75, z + face * 0.155);
+    group.add(front, side);
   }
-  const gw = (x: number, y: number) => new THREE.Vector3(x, WALL_H + y, HZ - 0.05);
-  holes.push({ corners: [gw(-0.9, gableWin[3]), gw(0.9, gableWin[3]), gw(0.9, gableWin[1]), gw(-0.9, gableWin[1])], strength: 0.08 });
-
-  // Bales, crates and barrels: merged per material.
-  const rnd = mulberry32(19);
-  const bales: THREE.BufferGeometry[] = [];
-  const bale = (x: number, y: number, z: number, r: number) => {
-    const g = new THREE.BoxGeometry(1.1, 0.5, 0.55);
-    g.rotateY(r + (rnd() - 0.5) * 0.08);
-    bales.push(g.translate(x, y + 0.25, z));
-  };
-  const baleStack = (x0: number, z0: number, cols: number, rows: number, layers: number, r = false) => {
-    for (let l = 0; l < layers; l++) for (let i = 0; i < cols - l; i++) for (let j = 0; j < rows; j++) {
-      const a = i * 1.12 + l * 0.56, b = j * 0.57;
-      bale(x0 + (r ? b : a), l * 0.5, z0 + (r ? a : b), r ? Math.PI / 2 : 0);
-    }
-    const w = (cols * 1.12), d = rows * 0.57;
-    box({ minX: x0 - 0.6, maxX: x0 + (r ? d : w) - 0.5, minY: 0, maxY: layers * 0.5, minZ: z0 - 0.35, maxZ: z0 + (r ? w : d) - 0.3 });
-  };
-  baleStack(-HX + 1.2, -3.0, 4, 2, 3); // in the left stalls
-  baleStack(-HX + 1.0, 2.2, 3, 3, 2);
-  baleStack(-HX + 1.0, 8.6, 4, 2, 2);
-  baleStack(HX - 2.0, -HZ + 0.9, 4, 3, 4, true); // back right corner, under the loft
-  baleStack(-HX + 0.9, -HZ + 0.9, 3, 2, 2);
-  for (let i = 0; i < 24; i++) { // rows of bales up on the loft
-    if (rnd() < 0.15) continue;
-    const x = -HX + 1.0 + i * 1.15;
-    bale(x, LOFT.y + 0.1, -HZ + 0.9, 0);
-    if (rnd() < 0.6) bale(x, LOFT.y + 0.6, -HZ + 0.9, 0);
-    if (rnd() < 0.5) bale(x, LOFT.y + 0.1, -HZ + 2.2 + rnd() * 0.3, (rnd() - 0.5) * 0.3);
+  const wallFace = HX - 0.075;
+  const plate = new THREE.Mesh(new THREE.PlaneGeometry(2.0, 0.44).rotateY(-Math.PI / 2), new THREE.MeshStandardMaterial({ map: plateTexture(t('exit.sign')), roughness: 0.5, metalness: 0.2 }));
+  plate.position.set(wallFace - 0.01, DOOR_H + 1.25, EXIT.z);
+  group.add(plate);
+  const lampKit = new Kit();
+  const lens = new THREE.MeshStandardMaterial({ color: '#fff3d6', emissive: '#ffd890', emissiveIntensity: 2.2 });
+  for (const dz of [-1.45, 1.45]) {
+    lampKit.add(m.iron, new THREE.BoxGeometry(0.08, 0.2, 0.2).translate(wallFace - 0.04, DOOR_H + 1.25, EXIT.z + dz));
+    lampKit.add(m.iron, new THREE.BoxGeometry(0.3, 0.12, 0.26).translate(wallFace - 0.2, DOOR_H + 1.32, EXIT.z + dz));
+    lampKit.add(lens, new THREE.BoxGeometry(0.26, 0.02, 0.22).translate(wallFace - 0.2, DOOR_H + 1.255, EXIT.z + dz));
   }
-  group.add(shadowed(new THREE.Mesh(mergeGeometries(bales), hayMat)));
+  lampKit.add(m.iron, new THREE.BoxGeometry(0.08, 0.52, 1.5).translate(wallFace - 0.04, DOOR_H + 2.1, EXIT.z));
+  lampKit.place(group, box, 0, 0, 0, false);
+  const clock = ledClock();
+  const clockFace = new THREE.Mesh(new THREE.PlaneGeometry(1.38, 0.43).rotateY(-Math.PI / 2), new THREE.MeshBasicMaterial({ map: clock.tex, toneMapped: false }));
+  clockFace.position.set(wallFace - 0.085, DOOR_H + 2.1, EXIT.z);
+  group.add(clockFace);
 
-  const crates: THREE.BufferGeometry[] = [], crateEdges: THREE.BufferGeometry[] = [];
-  const crate = (x: number, y: number, z: number, s: number, r: number) => {
-    crates.push(scaleUV(new THREE.BoxGeometry(s, s, s), s / 1.2, s / 1.2).rotateY(r).translate(x, y + s / 2, z));
-    const e = 0.07;
-    for (const [dx, dz] of [[-1, -1], [1, -1], [1, 1], [-1, 1]]) crateEdges.push(timber(e, s + 0.01, e, dx * (s / 2 - e / 2), 0, dz * (s / 2 - e / 2)).rotateY(r).translate(x, y + s / 2, z));
-    if (y === 0) box({ minX: x - s / 2, maxX: x + s / 2, minY: 0, maxY: s, minZ: z - s / 2, maxZ: z + s / 2 });
-  };
-  crate(HX - 1.2, 0, 2.2, 0.9, 0.1); crate(HX - 1.3, 0.9, 2.3, 0.7, 0.4); crate(HX - 1.1, 0, 3.3, 0.8, -0.2);
-  crate(HX - 1.0, 0, -8.8, 0.9, 0.3); crate(-HX + 1.4, 0, 14.6, 0.8, 0.2); crate(-HX + 2.4, 0, 15.2, 0.7, -0.3);
-  crate(-7.4, 0, HZ - 0.9, 0.9, 0.05); crate(-7.3, 0.9, HZ - 0.95, 0.75, -0.2);
-  group.add(shadowed(new THREE.Mesh(mergeGeometries(crates), boardMat)), shadowed(new THREE.Mesh(mergeGeometries(crateEdges), beamMat)));
-
-  const staves: THREE.BufferGeometry[] = [], hoops: THREE.BufferGeometry[] = [];
-  const barrelProf = [[0, 0], [0.3, 0], [0.34, 0.25], [0.36, 0.5], [0.34, 0.75], [0.3, 1.0], [0, 1.0]].map(([a, b]) => new THREE.Vector2(a, b));
-  const barrel = (x: number, z: number) => {
-    staves.push(scaleUV(new THREE.LatheGeometry(barrelProf, 18), 3, 1).translate(x, 0, z));
-    for (const [y, r] of [[0.12, 0.315], [0.5, 0.362], [0.88, 0.315]]) hoops.push(new THREE.TorusGeometry(r, 0.018, 4, 24).rotateX(Math.PI / 2).translate(x, y, z));
-    box({ minX: x - 0.36, maxX: x + 0.36, minY: 0, maxY: 1, minZ: z - 0.36, maxZ: z + 0.36 });
-  };
-  barrel(HX - 1.0, 5.2); barrel(HX - 1.8, 5.6); barrel(HX - 1.1, -10.6); barrel(-HX + 1.1, 16.2); barrel(8.6, HZ - 0.8);
-  group.add(shadowed(new THREE.Mesh(mergeGeometries(staves), beamMat)), shadowed(new THREE.Mesh(mergeGeometries(hoops), iron)));
-
-  // Workbench by the right wall with old tools hanging above it.
-  const bench = new THREE.Group();
-  bench.position.set(HX - 0.75, 0, -3.2);
-  const benchTop = shadowed(new THREE.Mesh(scaleUV(new THREE.BoxGeometry(0.9, 0.1, 3.2), 0.8, 2.6), boardMat));
-  benchTop.position.y = 0.92;
-  bench.add(benchTop);
-  for (const [dx, dz] of [[-0.35, -1.45], [0.35, -1.45], [-0.35, 1.45], [0.35, 1.45]]) {
-    const leg = shadowed(new THREE.Mesh(timberGeo(0.1, 0.88, 0.1), beamMat));
-    leg.position.set(dx, 0.44, dz);
-    bench.add(leg);
-  }
-  group.add(bench);
-  box({ minX: HX - 1.2, maxX: HX - 0.3, minY: 0, maxY: 0.97, minZ: -4.8, maxZ: -1.6 });
-  const hang = (id: 'spade' | 'pitchfork' | 'toy_shovel', z: number, tilt: number) => {
-    const m = buildModel(id); // working end up, blade facing the room
-    m.rotation.set(Math.PI / 2, -Math.PI / 2, 0, 'YXZ');
-    const peg = new THREE.Group();
-    peg.rotation.x = tilt;
-    peg.position.set(HX - 0.2, 1.4, z);
-    peg.add(m);
-    m.traverse((o) => { if (o instanceof THREE.Mesh) o.castShadow = true; });
-    group.add(peg);
-    return;
-  };
-  hang('pitchfork', -4.2, 0.05); hang('spade', -3.3, -0.04); hang('spade', -2.6, 0.06);
-
-  // Loose straws on the floor.
-  const counterPos = new THREE.Vector3(5.6, 0, 12.4);
-  const strawCarpet = floorStraws(6500, BALANCE.stack.radiusM, mulberry32(5), { hx: HX, hz: HZ, counter: [counterPos.x, counterPos.z] });
-  group.add(strawCarpet);
-
-  // Selling counter in the front area, facing the stack.
-  const counter = new THREE.Group();
-  counter.position.copy(counterPos);
-  group.add(counter);
-  const body = shadowed(new THREE.Mesh(scaleUV(new THREE.BoxGeometry(2.4, 1.0, 0.9), 1.2, 0.5), boardMat));
-  body.position.y = 0.5;
-  const top = shadowed(new THREE.Mesh(timberGeo(2.6, 0.08, 1.05), beamMat));
-  top.position.y = 1.04;
-  const sign = new THREE.Mesh(new THREE.PlaneGeometry(1.6, 0.4), new THREE.MeshStandardMaterial({ map: signTexture(t('counter.sign')), roughness: 0.85 }));
-  sign.position.set(0, 1.9, 0);
-  sign.rotation.y = Math.PI; // readable from the stack side
-  const signBack = shadowed(new THREE.Mesh(timberGeo(1.66, 0.46, 0.04), beamMat));
-  signBack.position.set(0, 1.9, 0.025);
-  const postL = shadowed(new THREE.Mesh(timberGeo(0.08, 0.9, 0.08), beamMat));
-  postL.position.set(-0.75, 1.5, 0.03);
-  const postR = postL.clone();
-  postR.position.x = 0.75;
-  counter.add(body, top, sign, signBack, postL, postR);
-  box({ minX: counterPos.x - 1.3, maxX: counterPos.x + 1.3, minY: 0, maxY: 1.08, minZ: counterPos.z - 0.53, maxZ: counterPos.z + 0.53 });
-
-  // Chalk A-frame with the price, between the stack and the counter.
-  const aframe = new THREE.Group();
-  aframe.position.set(3.6, 0, 11.3);
-  aframe.rotation.y = Math.PI - 0.35;
-  const chalk = new THREE.MeshStandardMaterial({ map: priceTexture(), roughness: 0.95 });
-  for (const side of [1, -1]) {
-    const leaf = new THREE.Group();
-    leaf.position.set(0, 0, side * 0.22);
-    leaf.rotation.x = -side * 0.24;
-    const backBoard = shadowed(new THREE.Mesh(timberGeo(0.62, 0.92, 0.025), beamMat));
-    backBoard.position.y = 0.46;
-    leaf.add(backBoard);
-    if (side === 1) {
-      const face = new THREE.Mesh(new THREE.PlaneGeometry(0.54, 0.82), chalk);
-      face.position.set(0, 0.47, 0.014);
-      leaf.add(face);
-    }
-    aframe.add(leaf);
-  }
-  group.add(aframe);
-  box({ minX: 3.6 - 0.38, maxX: 3.6 + 0.38, minY: 0, maxY: 0.95, minZ: 11.3 - 0.3, maxZ: 11.3 + 0.3 });
-
-  // Supply board on the other side, facing the stack.
-  const shop = new THREE.Group();
-  const shopPos = new THREE.Vector3(-5.6, 0, 12.4);
-  shop.position.copy(shopPos);
-  group.add(shop);
-  for (const x of [-0.9, 0.9]) {
-    const p = shadowed(new THREE.Mesh(timberGeo(0.1, 2.3, 0.1), beamMat));
-    p.position.set(x, 1.15, 0);
-    shop.add(p);
-  }
-  const frameBox = shadowed(new THREE.Mesh(timberGeo(1.9, 1.2, 0.05), beamMat));
-  frameBox.position.set(0, 1.55, 0);
-  const face = new THREE.Mesh(new THREE.PlaneGeometry(1.9, 1.19), new THREE.MeshStandardMaterial({ map: boardTexture(), roughness: 0.9 }));
-  face.position.set(0, 1.55, -0.03);
-  face.rotation.y = Math.PI;
-  const visor = shadowed(new THREE.Mesh(timberGeo(2.1, 0.06, 0.3), beamMat));
-  visor.position.set(0, 2.28, -0.05);
-  visor.rotation.x = -0.15;
-  shop.add(frameBox, face, visor);
-  box({ minX: shopPos.x - 0.96, maxX: shopPos.x + 0.96, minY: 0, maxY: 2.3, minZ: shopPos.z - 0.08, maxZ: shopPos.z + 0.08 });
-
-  // The exit: two heavy doors barred and padlocked, a sign above and the needle board beside.
+  // The roll-up door: a curtain hung from the drum (scaled from the top as it rolls), a bottom bar
+  // with a hasp, and a padlock through the hasp.
   const door = new THREE.Group();
   group.add(door);
-  const leaves: THREE.Group[] = [];
-  for (const s of [-1, 1]) {
-    const hinge = new THREE.Group();
-    hinge.position.set(s * DOOR_W, 0, HZ);
-    const leaf = new THREE.Group();
-    leaf.position.x = -s * DOOR_W / 2;
-    hinge.add(leaf);
-    const panel = shadowed(new THREE.Mesh(scaleUV(new THREE.BoxGeometry(DOOR_W - 0.012, DOOR_H - 0.04, 0.12), DOOR_W / 1.6, DOOR_H / 1.6), boardMat));
-    panel.position.y = DOOR_H / 2;
-    leaf.add(panel);
-    const brace: THREE.BufferGeometry[] = [];
-    for (const y of [0.5, DOOR_H / 2, DOOR_H - 0.5]) brace.push(timber(DOOR_W - 0.2, 0.26, 0.08, 0, y, -0.1));
-    const diag = Math.hypot(DOOR_W - 0.5, DOOR_H / 2 - 0.6);
-    for (const [y0, y1] of [[0.5, DOOR_H / 2], [DOOR_H / 2, DOOR_H - 0.5]]) brace.push(timber(diag, 0.22, 0.07, 0, (y0 + y1) / 2, -0.1, 1.2, 0, 0, s * Math.atan2(y1 - y0, DOOR_W - 0.5)));
-    leaf.add(shadowed(new THREE.Mesh(mergeGeometries(brace), beamMat)));
-    for (const y of [0.9, DOOR_H - 0.9]) { // hinge straps
-      const strap = shadowed(new THREE.Mesh(new THREE.BoxGeometry(1.6, 0.12, 0.03), iron));
-      strap.position.set(s * (DOOR_W / 2 - 0.8), y, -0.16);
-      leaf.add(strap);
-    }
-    for (const y of [2.75, 3.65]) { // brackets for the bar
-      const br = shadowed(new THREE.Mesh(new THREE.BoxGeometry(0.1, 0.12, 0.34), iron));
-      br.position.set(-s * (DOOR_W / 2 - 1.0), y, -0.3);
-      leaf.add(br);
-    }
-    door.add(hinge);
-    leaves.push(hinge);
-  }
-  const bar = shadowed(new THREE.Mesh(timberGeo(2 * DOOR_W + 0.6, 0.26, 0.22), beamMat));
-  bar.position.set(0, 3.2, HZ - 0.45);
+  const shutterMaps = [tex.shutter.map, tex.shutter.normalMap, tex.shutter.roughnessMap].map((x) => {
+    const c = x.clone();
+    c.wrapS = c.wrapT = THREE.RepeatWrapping;
+    c.needsUpdate = true;
+    return c;
+  });
+  const curtain = new THREE.Group();
+  curtain.position.set(HX - 0.02, DOOR_H, EXIT.z);
+  const shutterMat = new THREE.MeshStandardMaterial({ map: shutterMaps[0], normalMap: shutterMaps[1], roughnessMap: shutterMaps[2], roughness: 1, metalness: 0.35, side: THREE.DoubleSide });
+  curtain.add(shadowed(new THREE.Mesh(new THREE.PlaneGeometry(DW, DOOR_H).rotateY(-Math.PI / 2).translate(0, -DOOR_H / 2, 0), shutterMat)));
+  const bottom = new THREE.Group();
+  bottom.position.set(HX - 0.06, 0, EXIT.z);
+  bottom.add(shadowed(new THREE.Mesh(new THREE.BoxGeometry(0.1, 0.1, DW).translate(0, 0.05, 0), m.steel)));
+  bottom.add(shadowed(new THREE.Mesh(new THREE.BoxGeometry(0.03, 0.34, 0.09).translate(-0.07, 0.25, 0), m.steel))); // hasp
   const lock = new THREE.Group();
-  lock.position.set(0, 3.2, HZ - 0.6);
-  lock.scale.setScalar(1.7);
-  const links: THREE.BufferGeometry[] = [];
-  for (let i = 0; i < 9; i++) { // chain wrapped around the bar, hanging down to the lock
-    const a = (i / 9) * Math.PI * 2;
-    links.push(new THREE.TorusGeometry(0.05, 0.012, 5, 10).rotateY(i % 2 ? Math.PI / 2 : 0).rotateX(a).translate(0, Math.sin(a) * 0.1, 0.09 + Math.cos(a) * 0.1));
-  }
-  for (let i = 0; i < 3; i++) links.push(new THREE.TorusGeometry(0.05, 0.012, 5, 10).rotateY(i % 2 ? Math.PI / 2 : 0).translate(0, -0.22 - i * 0.08, -0.08));
-  lock.add(shadowed(new THREE.Mesh(mergeGeometries(links), iron)));
-  const lockBody = shadowed(new THREE.Mesh(new THREE.BoxGeometry(0.26, 0.22, 0.09), new THREE.MeshStandardMaterial({ color: '#b39549', roughness: 0.35, metalness: 0.85, emissive: '#2a2008' })));
-  lockBody.position.set(0, -0.62, -0.08);
-  const shackle = shadowed(new THREE.Mesh(new THREE.TorusGeometry(0.08, 0.018, 6, 16, Math.PI), iron));
-  shackle.position.set(0, -0.51, -0.08);
+  lock.position.set(HX - 0.2, 0, EXIT.z);
+  lock.scale.setScalar(1.3);
+  const lockBody = shadowed(new THREE.Mesh(new THREE.BoxGeometry(0.07, 0.15, 0.17), new THREE.MeshStandardMaterial({ color: '#b39549', roughness: 0.35, metalness: 0.85, emissive: '#2a2008' })));
+  lockBody.position.y = 0.154;
+  const shackle = shadowed(new THREE.Mesh(new THREE.TorusGeometry(0.055, 0.014, 6, 16, Math.PI).rotateY(Math.PI / 2), m.iron));
+  shackle.position.y = 0.23;
   lock.add(lockBody, shackle);
-  door.add(bar, lock);
-  const exitSign = new THREE.Mesh(new THREE.PlaneGeometry(2.4, 0.6), new THREE.MeshStandardMaterial({ map: signTexture(t('exit.sign')), roughness: 0.85 }));
-  exitSign.position.set(0, DOOR_H + 1.0, HZ - 0.08);
-  exitSign.rotation.y = Math.PI;
-  group.add(exitSign);
+  door.add(curtain, bottom, lock);
+  const doorPane = new Kit(); // the opening between the jambs counts as the door from a step away
+  hitPane(doorPane, DW, DOOR_H, 0, DOOR_H / 2, 0);
+  doorPane.group.position.set(PX - 0.15, 0, EXIT.z);
+  doorPane.group.rotation.y = -Math.PI / 2;
+  door.add(doorPane.group);
+  const doorBlock = box({ minX: HX - 0.45, maxX: HX + 0.3, minY: 0, maxY: 14, minZ: D0, maxZ: D1 });
+  const roll = (k: number) => { // 1 = shut, 0 = rolled up
+    curtain.scale.y = Math.max(0.001, k);
+    curtain.visible = k > 0.01;
+    shutterMaps.forEach((x) => x.repeat.set(DW / 1.2, (k * DOOR_H) / 1.2));
+    bottom.position.y = DOOR_H * (1 - k);
+  };
+  roll(1);
 
+  // Needle board on legs beside the exit.
   const boardTex = needleBoard();
-  const board = new THREE.Group();
-  board.position.set(DOOR_W + 2.6, 1.75, HZ - 0.1);
-  board.rotation.y = Math.PI;
-  const bFrame = shadowed(new THREE.Mesh(timberGeo(2.5, 1.7, 0.08), beamMat));
+  const boardKit = new Kit();
+  boardKit.add(m.beam, timber(2.5, 1.7, 0.08, 0, 1.85, 0));
+  for (const x of [-1.1, 1.1]) boardKit.add(m.beam, timber(0.1, 2.75, 0.1, x, 1.375, -0.07), timber(0.1, 0.08, 0.7, x, 0.04, -0.07));
   const bFace = new THREE.Mesh(new THREE.PlaneGeometry(2.4, 1.6), new THREE.MeshStandardMaterial({ map: boardTex.tex, roughness: 0.9 }));
-  bFace.position.z = 0.045;
-  board.add(bFrame, bFace);
-  group.add(board);
+  bFace.position.set(0, 1.85, 0.045);
+  boardKit.group.add(bFace);
+  boardKit.solid(-1.25, 1.25, 0, 2.8, -0.42, 0.1);
+  const board = boardKit.place(group, box, HX - 1.7, -1.7, -Math.PI / 2);
 
-  // Lamps over the front area and the back of the barn.
-  group.add(lamp(-5.6, WALL_H - 0.1, 12.67, 2.4, beamMat), lamp(5.6, WALL_H - 0.1, 12.67, 2.4, beamMat), lamp(0, WALL_H - 0.1, -12.67, 2.8, beamMat));
+  // Along the exit wall: the selling kiosk in the far corner, the supply stall past the door.
+  const sell = sellBooth(m);
+  const counter = sell.kit.place(group, box, 13.4, -18.0, -Math.PI / 2);
+  const counterTop = sell.top.clone().applyMatrix4(counter.matrixWorld);
+  aFrame(m, priceTexture()).place(group, box, 10.9, -15.9, -Math.PI / 2 + 0.5);
+  const shop = supplyStall(m).place(group, box, 13.25, 13.0, -Math.PI / 2);
+  aFrame(m, null).place(group, box, 11.6, 9.4, -Math.PI / 2 + 0.3);
+  // Storage shed out in the yard.
+  storageShed(m).place(group, box, -4.2, -16.6, 0);
+  aFrame(m, null).place(group, box, -8.6, -14.6, 0.4);
 
-  // Outside, light and dust.
-  const nature = new Nature(tex, colliders, beamMat, hayMat);
+  // Clutter: bollards, a tripod and a fern by the door, bales, crates and barrels along the walls.
+  const rnd = mulberry32(19);
+  const props = new Kit();
+  bollard(m, props, HX - 0.8, D0 - 0.6);
+  bollard(m, props, HX - 0.8, D1 + 0.6);
+  tripod(m, props, 12.4, 7.4);
+  fernPot(m, props, 14.1, 8.6, m.boards);
+  const baleStack = (x0: number, z0: number, cols: number, rows: number, layers: number) => { // long side along z
+    for (let l = 0; l < layers; l++) for (let i = 0; i < cols - l; i++) for (let j = 0; j < rows; j++) {
+      bale(props, m, x0 + j * 0.57 * Math.sign(-x0), l * 0.48, z0 + i * 1.07 + l * 0.53, Math.PI / 2 + (rnd() - 0.5) * 0.08);
+    }
+    const x1 = x0 + (rows - 1) * 0.57 * Math.sign(-x0);
+    props.solid(Math.min(x0, x1) - 0.3, Math.max(x0, x1) + 0.3, 0, layers * 0.48, z0 - 0.55, z0 + (cols - 1) * 1.07 + 0.55);
+  };
+  baleStack(-14.2, -9.6, 5, 2, 3);
+  baleStack(-14.2, 6.3, 3, 2, 2);
+  baleStack(-14.2, -20.6, 3, 3, 2);
+  baleStack(14.1, -9.0, 3, 2, 2);
+  const crate = (x: number, y: number, z: number, s: number, r: number) => {
+    props.add(m.boards, worldBox(s, s, s, x, y + s / 2, z, 0.8, r));
+    const e = 0.07;
+    for (const [dx, dz] of [[-1, -1], [1, -1], [1, 1], [-1, 1]]) props.add(m.beam, timber(e, s + 0.01, e, dx * (s / 2 - e / 2), 0, dz * (s / 2 - e / 2)).rotateY(r).translate(x, y + s / 2, z));
+    if (y === 0) props.solid(x - s / 2, x + s / 2, 0, s, z - s / 2, z + s / 2);
+  };
+  crate(-14.0, 0, 12.3, 0.9, 0.1); crate(-13.95, 0.9, 12.35, 0.7, 0.4); crate(-14.05, 0, 13.4, 0.8, -0.2);
+  crate(14.0, 0, -6.4, 0.9, 0.3); crate(14.05, 0, -5.0, 0.7, -0.15);
+  crate(-7.4, 0, HZ - 0.9, 0.9, 0.05); crate(-7.3, 0.9, HZ - 0.95, 0.75, -0.2);
+  const barrelProf = [[0, 0], [0.3, 0], [0.34, 0.25], [0.36, 0.5], [0.34, 0.75], [0.3, 1.0], [0, 1.0]].map(([a, b]) => new THREE.Vector2(a, b));
+  const barrel = (x: number, z: number) => {
+    const g = new THREE.LatheGeometry(barrelProf, 18);
+    const uv = g.getAttribute('uv') as THREE.BufferAttribute;
+    for (let i = 0; i < uv.count; i++) uv.setXY(i, uv.getX(i) * 3, uv.getY(i));
+    props.add(m.beam, g.translate(x, 0, z));
+    for (const [y, r] of [[0.12, 0.315], [0.5, 0.362], [0.88, 0.315]]) props.add(m.iron, new THREE.TorusGeometry(r, 0.018, 4, 24).rotateX(Math.PI / 2).translate(x, y, z));
+    props.solid(x - 0.36, x + 0.36, 0, 1, z - 0.36, z + 0.36);
+  };
+  barrel(-14.0, 14.8); barrel(-13.2, 15.3); barrel(9.0, HZ - 0.9); barrel(-14.1, -17.0);
+  // Workbench on the far wall with old tools hanging above it.
+  props.add(m.boards, worldBox(0.9, 0.1, 3.0, -14.05, 0.92, 2.7, 0.8), worldBox(0.04, 1.3, 3.0, -14.83, 2.35, 2.7, 1.6));
+  for (const [dx, dz] of [[-0.35, -1.35], [0.35, -1.35], [-0.35, 1.35], [0.35, 1.35]]) props.add(m.beam, timber(0.1, 0.88, 0.1, -14.05 + dx, 0.44, 2.7 + dz));
+  props.solid(-14.5, -13.6, 0, 0.97, 1.2, 4.2);
+  props.place(group, box, 0, 0);
+  const hang = (id: 'spade' | 'pitchfork', z: number, tilt: number) => {
+    const tool = buildModel(id); // working end up, blade facing the room
+    tool.rotation.set(Math.PI / 2, Math.PI / 2, 0, 'YXZ');
+    tool.traverse((o) => { if (o instanceof THREE.Mesh) o.castShadow = true; });
+    const peg = new THREE.Group();
+    peg.rotation.x = tilt;
+    peg.position.set(-HX + 0.3, 1.75, z);
+    peg.add(tool);
+    group.add(peg);
+  };
+  hang('pitchfork', 1.8, 0.05); hang('spade', 2.7, -0.04); hang('spade', 3.4, 0.06);
+
+  // Loose straws on the floor.
+  const strawCarpet = floorStraws(6500, BALANCE.stack.radiusM, mulberry32(5), { hx: HX, hz: HZ, counter: [counterTop.x, counterTop.z] });
+  group.add(strawCarpet);
+
+  // Outside, and faint dust in the sunlight over the open middle.
+  const nature = new Nature(tex, colliders, m.beam, hayMat);
   nature.grassGroup.visible = false;
   group.add(nature.group);
-  const beams = new Sunbeams(holes, SUN_DIR);
-  const doorBeam = new Sunbeams([{ corners: [new THREE.Vector3(-DOOR_W, DOOR_H, HZ), new THREE.Vector3(DOOR_W, DOOR_H, HZ), new THREE.Vector3(DOOR_W, 0.01, HZ), new THREE.Vector3(-DOOR_W, 0.01, HZ)], strength: 0.035 }], SUN_DIR);
-  doorBeam.group.visible = false;
-  beams.group.add(doorBeam.group);
+  const yb = rafterY(IN) + 0.2;
+  const beams = new Sunbeams([{ corners: [new THREE.Vector3(-IN, yb, -HZ), new THREE.Vector3(IN, yb, -HZ), new THREE.Vector3(IN, yb, HZ), new THREE.Vector3(-IN, yb, HZ)], strength: 0.012 }], SUN_DIR);
   group.add(beams.group);
 
-  // Unlock animation: the padlock and chain drop, the bar falls aside, the doors swing out.
-  let openT = -1, lockVy = 0, barVy = 0;
+  // Unlock: the shackle pops, the padlock falls onto the floor, then the door rolls up.
+  let openT = -1, clockT = 1, clockText = '';
   const unlock = (instant = false) => {
     if (openT >= 0) return;
     openT = 0;
     colliders.remove(doorBlock);
     nature.grassGroup.visible = true;
-    doorBeam.group.visible = true;
     boardTex.draw(NEEDLES.map((n) => n.id));
-    if (instant) { // straight to the end state
-      lock.position.y = 1.25;
-      bar.position.set(0, 0.13, HZ - 1.65);
-      bar.rotation.y = 0.35;
-      openT = 3.9;
-      animate(0.01);
-    }
+    if (instant) { openT = 4.9; animate(0.2); }
   };
   const animate = (dt: number): boolean => {
-    if (openT < 0 || openT > 6) return false;
+    if (openT < 0 || openT > 5) return false;
     openT += dt;
-    if (lock.position.y > 1.25) { lockVy -= 18 * dt; lock.position.y = Math.max(1.25, lock.position.y + lockVy * dt); lock.rotation.z += dt * 2; }
-    if (openT > 0.5 && bar.position.y > 0.13) {
-      barVy -= 18 * dt;
-      bar.position.y = Math.max(0.13, bar.position.y + barVy * dt);
-      bar.position.z = HZ - 0.45 - Math.min(1, openT - 0.5) * 1.2;
-      bar.rotation.y = Math.min(1, openT - 0.5) * 0.35;
-    }
-    const k = Math.min(1, Math.max(0, (openT - 1.3) / 2.6));
-    const a = (1 - (1 - k) ** 3) * 1.75;
-    leaves[0].rotation.y = -a;
-    leaves[1].rotation.y = a;
+    shackle.position.y = 0.23 + Math.min(1, openT / 0.25) * 0.04;
+    const tip = Math.min(1, Math.max(0, (openT - 0.35) / 0.45));
+    lock.rotation.z = tip * tip * (Math.PI / 2); // tips over away from the door
+    lock.position.y = tip * 0.045;
+    const k = Math.min(1, Math.max(0, (openT - 1.0) / 3.0));
+    roll(1 - k * k * (3 - 2 * k));
     return true;
+  };
+  const pad = (n: number) => String(n).padStart(2, '0');
+  const tickClock = (dt: number) => {
+    clockT += dt;
+    if (clockT < 0.25) return;
+    clockT = 0;
+    const d = new Date();
+    const text = `${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`;
+    if (text !== clockText) { clockText = text; clock.draw(text); }
   };
 
   return {
-    group, counter, shop, door, board, counterTop: new THREE.Vector3(counterPos.x, 1.12, counterPos.z),
-    spawn: new THREE.Vector3(0.5, 0, 15.6), spawnYaw: 0, exitZ: HZ + 1.0,
+    group, counter, shop, door, board, counterTop,
+    spawn: new THREE.Vector3(-2.0, 0, 18.6), spawnYaw: -0.35,
+    exited: (x) => x > HX + 1.0,
     inside: (x, z) => Math.abs(x) < HX && Math.abs(z) < HZ,
     setNeedles: (found) => boardTex.draw(found),
     unlock,
-    update: (dt) => { nature.update(dt); if (beams.group.visible) beams.update(dt); return animate(dt); },
+    update: (dt) => { nature.update(dt); tickClock(dt); if (beams.group.visible) beams.update(dt); return animate(dt); },
     quality: { grass: nature.grassPatches, floorStraws: strawCarpet, beams: beams.group },
   };
-}
-
-function timberGeo(w: number, h: number, d: number): THREE.BufferGeometry {
-  return timber(w, h, d, 0, 0, 0, 1.2);
-}
-
-/** Mirroring a geometry flips its triangles; restore counter-clockwise order. */
-function flipWinding(g: THREE.BufferGeometry): THREE.BufferGeometry {
-  const idx = g.getIndex()!;
-  for (let i = 0; i < idx.count; i += 3) { const a = idx.getX(i + 1); idx.setX(i + 1, idx.getX(i + 2)); idx.setX(i + 2, a); }
-  return g;
-}
-
-/** Roof boards: upward-facing triangles get the metal sheet material (group 1), the rest show wood. */
-function splitRoofGroups(g: THREE.BufferGeometry): void {
-  const idx = g.getIndex()!, n = g.getAttribute('normal') as THREE.BufferAttribute;
-  const under: number[] = [], over: number[] = [];
-  for (let i = 0; i < idx.count; i += 3) {
-    const a = idx.getX(i);
-    (n.getY(a) > 0.5 ? over : under).push(a, idx.getX(i + 1), idx.getX(i + 2));
-  }
-  g.setIndex([...under, ...over]);
-  g.clearGroups();
-  g.addGroup(0, under.length, 0);
-  g.addGroup(under.length, over.length, 1);
 }
