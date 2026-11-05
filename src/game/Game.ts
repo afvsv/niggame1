@@ -1,7 +1,8 @@
 import * as THREE from 'three';
 import { BALANCE } from '../data/balance';
-import { CONTAINERS, ContainerDef, ContainerId, DETECTOR, ItemId, ToolDef, isContainer, itemById } from '../data/tools';
+import { ContainerDef, ContainerId, ItemId, ToolDef, isContainer, itemById } from '../data/tools';
 import { NeedleId, Perks, sumPerks } from '../data/needles';
+import { UPGRADES, UpgradeId, upgradePrice, upgradeById } from '../data/upgrades';
 import { fmtMoney } from '../core/format';
 import { strands, t } from '../core/i18n';
 import { Input } from '../core/input';
@@ -12,6 +13,9 @@ import { CONTAINER_WORLD, ContainerProps } from './containers';
 import { DetectorSignal, hayAlong, signalStrength } from './detector';
 import { Inventory } from './Inventory';
 import { NeedleField } from './needles';
+import { Stamina } from './stamina';
+import { Derived, ToolStats, derive } from './stats';
+import { UpgradeState, Upgrades } from './Upgrades';
 
 export type Target =
   | { kind: 'hay'; hit: GridHit }
@@ -26,6 +30,9 @@ export interface GameEvents {
   full(): void;
   sell(value: number, strandsSold: number): void;
   buy(id: ItemId): void;
+  upgrade(id: UpgradeId, price: number): void;
+  /** Ran out of stamina. */
+  tired(): void;
   toolChange(): void;
   openShop(): void;
   pour(n: number, id: ContainerId): void;
@@ -67,6 +74,10 @@ export class Game {
   unlocked = false;
   escaped = false;
   perks: Perks = sumPerks([]);
+  readonly up = new Upgrades();
+  /** Current numbers after upgrades and needle bonuses. */
+  d: Derived = derive({}, this.perks);
+  readonly stamina = new Stamina();
   stats: Stats = { earned: 0, sold: 0, time: 0, containerSold: false };
   readonly detector = new DetectorSignal();
   private cooldown = 0;
@@ -86,20 +97,43 @@ export class Game {
     this.refreshPerks();
   }
 
+  /** Recomputes bonuses after a needle, an upgrade or loading a save. */
   refreshPerks(): void {
     this.perks = sumPerks(this.world.needles.found);
+    this.d = derive(this.up.levels, this.perks);
     this.unlocked = this.world.needles.found.length >= this.world.needles.total;
   }
 
   get found(): NeedleId[] { return this.world.needles.found; }
 
+  get toolStats(): ToolStats { return this.d.tools[this.inv.tool.id]; }
   /** How much the hands / current tool hold. */
-  get capacity(): number { return Math.round(this.inv.tool.capacity * (1 + this.perks.capacity)); }
-  containerCapacity(id: ContainerId): number {
-    return Math.round(CONTAINERS.find((c) => c.id === id)!.capacity * (1 + this.perks.capacity));
+  get capacity(): number { return this.toolStats.cap; }
+  containerCapacity(id: ContainerId): number { return this.d.containers[id]; }
+  get grab(): number { return this.toolStats.grab; }
+  get price(): number { return this.d.price; }
+
+  private has = (id: ItemId) => this.inv.has(id);
+  upgradeState(id: UpgradeId): UpgradeState { return this.up.state(id, this.money, this.has); }
+  missing(id: UpgradeId): Array<UpgradeId | ItemId> { return this.up.missing(id, this.has); }
+
+  /** How many upgrades can be bought right now (the HUD hints at the tree). */
+  upgradesAffordable(): number {
+    let n = 0;
+    for (const u of UPGRADES) if (this.upgradeState(u.id) === 'ok') n++;
+    return n;
   }
-  get grab(): number { return Math.round(this.inv.tool.grab * (1 + this.perks.grab)); }
-  get price(): number { return BALANCE.hay.pricePerStrand * (1 + this.perks.price); }
+
+  /** Buys the next level of an upgrade. */
+  buyUpgrade(id: UpgradeId): boolean {
+    if (this.upgradeState(id) !== 'ok') return false;
+    const price = upgradePrice(upgradeById(id), this.up.level(id));
+    this.money = Math.max(0, this.money - price);
+    this.up.buy(id);
+    this.refreshPerks();
+    this.ev.upgrade(id, price);
+    return true;
+  }
 
   /** What the held item carries right now: [amount, capacity]. Null for the detector. */
   load(): [number, number] | null {
@@ -116,7 +150,7 @@ export class Game {
   private findTarget(): Target {
     const cam = this.camera.position;
     this.camera.getWorldDirection(this.dir);
-    const reach = BALANCE.reachM;
+    const reach = this.d.reach;
     const hit = raycastGrid(this.grid, cam.x, cam.y, cam.z, this.dir.x, this.dir.y, this.dir.z, reach);
     this.raycaster.set(cam, this.dir);
     this.raycaster.far = reach;
@@ -134,8 +168,11 @@ export class Game {
     return best;
   }
 
-  update(dt: number): void {
+  /** `sprinting`: the player ran this frame. */
+  update(dt: number, sprinting = false): void {
     this.cooldown -= dt;
+    const wasTired = this.stamina.exhausted;
+    this.stamina.update(dt, this.d.staminaMax, this.d.regen, sprinting);
     this.noticeT -= dt;
     const live = this.input.locked; // no interaction while paused or a screen is open
     if (live) this.stats.time += dt;
@@ -214,9 +251,14 @@ export class Game {
     const beep = this.detector.update(dt, live && this.inv.active === 'detector', () => {
       const tip = cam.clone().addScaledVector(this.dir, 0.6).add(new THREE.Vector3(0, -0.6, 0));
       const n = this.world.needles.nearestHidden(tip);
-      return n ? signalStrength(tip.distanceTo(n), hayAlong(this.grid, tip, n), DETECTOR.rangeM) : 0;
+      return n ? signalStrength(tip.distanceTo(n), hayAlong(this.grid, tip, n), this.d.detectorRange, this.d.detectorMuffle) : 0;
     });
     if (beep) this.ev.beep(this.detector.strength);
+
+    if (!wasTired && this.stamina.exhausted) {
+      this.ev.tired();
+      if (live) this.notice(t('hint.tired'));
+    }
 
     if (this.unlocked && !this.escaped && cam.z > this.world.exitZ) {
       this.escaped = true;
@@ -332,7 +374,10 @@ export class Game {
     }
     if (got > 0) {
       this.carried += got;
-      this.cooldown = tool.cooldown;
+      const st = this.toolStats;
+      // Out of breath: swings get slow until the bar partly refills.
+      this.cooldown = st.cooldown * (this.stamina.exhausted ? BALANCE.stamina.tiredSlow : 1);
+      this.stamina.spend(st.stamina);
       const s = g.cellSize;
       const px = g.originX + (hit.x + 0.5 + hit.nx * 0.5) * s;
       const py = g.originY + (hit.y + 0.5 + hit.ny * 0.5) * s;
