@@ -121,3 +121,6 @@ kbd { display: inline-flex; align-items: center; justify-content: center; min-wi
 @keyframes panelIn { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
 @keyframes cardBought { 0% { background: rgba(242, 207, 69, .22); } 100% { background: var(--card-hi); } }
 @media (prefers-reduced-motion: reduce) { *, *::before { animation-duration: .01ms !important; transition: none !important; } }
+
+/* Soft vignette over the 3D view (under the HUD) */
+#app::after { content: ''; position: fixed; inset: 0; pointer-events: none; background: radial-gradient(ellipse at center, transparent 58%, rgba(12, 8, 3, .34) 100%); }
