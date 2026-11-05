@@ -25,6 +25,9 @@ export interface HudState {
   step: { n: number; total: number; text: string } | null;
   /** Detector signal 0..1, or null when the detector is not in hand. */
   signal: number | null;
+  stamina: { frac: number; tired: boolean };
+  /** Something in the upgrade tree can be bought. */
+  treeNew: boolean;
 }
 
 export interface WorldLabel { key: string; pos: THREE.Vector3; title: string; value: string; full: boolean; occluded?: boolean }
@@ -48,6 +51,10 @@ export class Hud {
   private signal = $('signal');
   private bars = [...$('signal-bars').children] as HTMLElement[];
   private toastEl = $('toast');
+  private stamina = $('stamina');
+  private staminaFill = $('stamina').querySelector('i')!;
+  private treeNew = $('hud-tree-new');
+  private fullT = 0;
   private labelsRoot = $('labels');
   private labels = new Map<string, { el: HTMLElement; title: HTMLElement; value: HTMLElement }>();
   private last: Record<string, string> = {};
@@ -58,6 +65,8 @@ export class Hud {
   constructor() {
     $('obj-title').textContent = t('obj.title');
     $('signal-label').textContent = t('hud.signal');
+    $('stamina-label').textContent = t('hud.stamina');
+    $('hud-tree-label').textContent = t('hud.tree');
   }
 
   private changed(key: string, value: string): boolean {
@@ -112,6 +121,19 @@ export class Hud {
       this.signal.classList.toggle('hot', (s.signal ?? 0) > 0.75);
     }
 
+    // Stamina: always on screen like the reference, faded while full.
+    const frac = Math.round(s.stamina.frac * 200) / 200;
+    this.fullT = frac >= 1 ? this.fullT + dt : 0;
+    if (this.changed('stamina', `${frac}|${s.stamina.tired}`)) {
+      this.staminaFill.style.transform = `scaleX(${frac})`;
+      this.stamina.classList.toggle('tired', s.stamina.tired);
+    }
+    if (this.changed('staminaFull', String(this.fullT > 1.5))) this.stamina.classList.toggle('rest', this.fullT > 1.5);
+    if (this.changed('treeNew', String(s.treeNew))) {
+      this.treeNew.textContent = s.treeNew ? t('hud.treeNew') : '';
+      $('hud-keys').classList.toggle('new', s.treeNew);
+    }
+
     if (this.toastTimer > 0 && (this.toastTimer -= dt) <= 0) this.toastEl.classList.add('hidden');
   }
 
@@ -145,6 +167,7 @@ export class Hud {
   }
 
   bumpMoney(): void { replay(this.money, 'bump'); }
+  flashStamina(): void { replay(this.stamina, 'flash'); }
   shakeHeld(): void { replay(this.held, 'shake'); }
 
   /** Big card in the upper middle: needle found, door unlocked. */

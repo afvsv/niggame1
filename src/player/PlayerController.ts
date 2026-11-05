@@ -14,8 +14,13 @@ export class PlayerController {
   onGround = false;
   /** Multiplier from the settings. */
   sensitivity = 1;
-  /** Movement speed multiplier (needle bonus). */
+  /** Movement speed multiplier (upgrades and needle bonus). */
   speedMul = 1;
+  jumpSpeed: number = P.jumpSpeed;
+  /** False while out of breath. */
+  canSprint = true;
+  /** Ran this frame (Shift held, moving, allowed): spends stamina. */
+  sprinting = false;
   private readonly box: AABB = { minX: 0, minY: 0, minZ: 0, maxX: 0, maxY: 0, maxZ: 0 };
 
   constructor(private readonly colliders: Colliders, private readonly camera: THREE.PerspectiveCamera) {}
@@ -75,7 +80,9 @@ export class PlayerController {
       if (input.down('KeyD')) fx += 1;
     }
     const len = Math.hypot(fx, fz) || 1;
-    const speed = (input.down('ShiftLeft') || input.down('ShiftRight') ? P.sprintSpeed : P.walkSpeed) * this.speedMul;
+    const shift = input.down('ShiftLeft') || input.down('ShiftRight');
+    this.sprinting = shift && this.canSprint && (fx !== 0 || fz !== 0) && this.onGround;
+    const speed = (shift && this.canSprint ? P.sprintSpeed : P.walkSpeed) * this.speedMul;
     const sin = Math.sin(this.yaw), cos = Math.cos(this.yaw);
     const wishX = ((fx * cos + fz * sin) / len) * speed;
     const wishZ = ((-fx * sin + fz * cos) / len) * speed;
@@ -83,7 +90,7 @@ export class PlayerController {
     this.vel.x += (wishX - this.vel.x) * Math.min(1, accel * dt);
     this.vel.z += (wishZ - this.vel.z) * Math.min(1, accel * dt);
 
-    if (this.onGround && input.locked && input.wasPressed('Space')) { this.vel.y = P.jumpSpeed; this.onGround = false; }
+    if (this.onGround && input.locked && input.wasPressed('Space')) { this.vel.y = this.jumpSpeed; this.onGround = false; }
     this.vel.y -= P.gravity * dt;
 
     // Sub-step to avoid tunnelling through 0.2 m cells.

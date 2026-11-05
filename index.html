@@ -33,7 +33,9 @@
         <div id="signal" class="hidden"><span id="signal-label"></span><span id="signal-bars"><i></i><i></i><i></i><i></i><i></i></span></div>
         <div id="held"><span id="held-name"></span><span id="held-load"></span></div>
         <div id="hotbar"></div>
+        <div id="hud-keys"><kbd>Tab</kbd><span id="hud-tree-label"></span><b id="hud-tree-new"></b></div>
       </div>
+      <div id="stamina"><span id="stamina-label"></span><div class="bar"><i></i></div></div>
     </div>
     <div id="shop" class="screen hidden" role="dialog" aria-labelledby="shop-title">
       <div class="panel">
@@ -46,6 +48,27 @@
         </header>
         <ul id="shop-list"></ul>
         <footer><span id="shop-count"></span><span id="shop-keys"></span><button id="shop-close" class="btn" type="button"></button></footer>
+      </div>
+    </div>
+    <div id="tree" class="screen hidden" role="dialog" aria-labelledby="tree-title">
+      <div class="tree-shell">
+        <header class="tree-head">
+          <h2 id="tree-title"></h2>
+          <input id="tree-search" type="search" autocomplete="off" spellcheck="false">
+          <b id="tree-money"></b>
+        </header>
+        <div class="tree-main">
+          <aside id="tree-side">
+            <div id="tree-branch-now"></div>
+            <ul id="tree-branches"></ul>
+          </aside>
+          <div id="tree-view">
+            <div id="tree-steps"></div>
+            <div id="tree-canvas"></div>
+          </div>
+          <section id="tree-detail"></section>
+        </div>
+        <footer id="tree-foot"></footer>
       </div>
     </div>
     <div id="overlay">

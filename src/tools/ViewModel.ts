@@ -37,6 +37,8 @@ export class ViewModel {
   private swingT = 1;
   private swingDur = 0.25;
   private switchT = 1;
+  /** Bob and sway multiplier ("Steady hands"). */
+  steady = 1;
   private bobPhase = 0;
   private bobAmp = 0;
   private swayX = 0;
@@ -109,14 +111,15 @@ export class ViewModel {
     const targetAmp = m.onGround ? clamp(m.speed / 4.2, 0, 1.4) : 0.15;
     this.bobAmp += (targetAmp - this.bobAmp) * Math.min(1, dt * 8);
     this.bobPhase += dt * m.speed * 1.5;
-    const bx = Math.sin(this.bobPhase) * 0.012 * this.bobAmp;
-    const by = -Math.abs(Math.cos(this.bobPhase)) * 0.014 * this.bobAmp;
+    const bx = Math.sin(this.bobPhase) * 0.012 * this.bobAmp * this.steady;
+    const by = -Math.abs(Math.cos(this.bobPhase)) * 0.014 * this.bobAmp * this.steady;
 
     // Sway: the tool lags behind mouse movement.
     const inv = 1 / Math.max(dt, 1 / 240);
     const k = Math.min(1, dt * 10);
-    this.swayY += (clamp(m.mouseDX * inv * 0.00004, -0.08, 0.08) - this.swayY) * k;
-    this.swayX += (clamp(m.mouseDY * inv * 0.00004, -0.06, 0.06) - this.swayX) * k;
+    const sw = 0.00004 * this.steady;
+    this.swayY += (clamp(m.mouseDX * inv * sw, -0.08, 0.08) - this.swayY) * k;
+    this.swayX += (clamp(m.mouseDY * inv * sw, -0.06, 0.06) - this.swayX) * k;
     const idle = Math.sin(this.time * 1.7) * 0.003;
 
     const [px, py, pz, rx, ry, rz] = POSE[this.current];

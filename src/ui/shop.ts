@@ -65,11 +65,13 @@ export class ShopScreen {
     const { inv, money } = this.game;
     const state = inv.buyState(def.id, money);
     const seg = (s: string) => `<span>${s}</span>`;
+    // Numbers with the upgrades and needle bonuses already bought.
+    const d = this.game.d;
     const stats = def.kind === 'tool'
-      ? `${seg(t('shop.grab', { strands: strands(def.grab) }))} · ${seg(t('shop.holds', { n: def.capacity }))} · ${seg(t('shop.cooldown', { s: fmtNumber(def.cooldown) }))}`
+      ? `${seg(t('shop.grab', { strands: strands(d.tools[def.id].grab) }))} · ${seg(t('shop.holds', { n: d.tools[def.id].cap }))} · ${seg(t('shop.cooldown', { s: fmtNumber(def.cooldown) }))}`
       : def.kind === 'container'
-        ? seg(t('shop.capacity', { strands: strands(def.capacity) }))
-        : seg(t('shop.range', { m: def.rangeM }));
+        ? seg(t('shop.capacity', { strands: strands(d.containers[def.id]) }))
+        : seg(t('shop.range', { m: fmtNumber(Math.round(d.detectorRange * 10) / 10) }));
     let foot: string;
     if (state === 'owned') foot = `<span class="status owned">${CHECK}${t('shop.owned')}</span>`;
     else if (state === 'locked') foot = `<span class="price">${tagPrice(def.price)}</span><span class="status locked">${LOCK}${t('shop.requires', { item: t(`item.${def.requires}`) })}</span>`;

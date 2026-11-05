@@ -1,6 +1,15 @@
 import * as THREE from 'three';
 import type { ItemId } from '../data/tools';
+import type { UpgradeIcon } from '../data/upgrades';
 import { buildModel, iconPose, loadOf, toolEnvironment } from './models';
+import { UPGRADE_ICONS, upgradeIconModel } from './upgradeModels';
+
+type Pose = { rot: THREE.Euler; elevation: number; fill: number };
+
+/** Icons for upgrades that have their own model (boots, bottle, ladder…). */
+export function renderUpgradeIcons(renderer: THREE.WebGLRenderer, size = 96): Map<UpgradeIcon, string> {
+  return renderModels(renderer, UPGRADE_ICONS.map((id) => ({ key: id, build: () => upgradeIconModel(id).model, pose: upgradeIconModel(id).pose })), size);
+}
 
 /**
  * Renders each item model into an offscreen target and returns PNG data URLs.
@@ -8,6 +17,10 @@ import { buildModel, iconPose, loadOf, toolEnvironment } from './models';
  * converted from linear to sRGB here. Rendered at 2x and downscaled for smooth edges.
  */
 export function renderIcons(renderer: THREE.WebGLRenderer, ids: readonly ItemId[], size = 96): Map<ItemId, string> {
+  return renderModels(renderer, ids.map((id) => ({ key: id, build: () => buildModel(id), pose: iconPose(id) })), size);
+}
+
+function renderModels<K>(renderer: THREE.WebGLRenderer, entries: ReadonlyArray<{ key: K; build: () => THREE.Group; pose: Pose }>, size: number): Map<K, string> {
   const S = size * 2;
   const rt = new THREE.WebGLRenderTarget(S, S);
   const scene = new THREE.Scene();
@@ -39,11 +52,10 @@ export function renderIcons(renderer: THREE.WebGLRenderer, ids: readonly ItemId[
   const prevAlpha = renderer.getClearAlpha();
   renderer.setClearColor(0x000000, 0);
 
-  const result = new Map<ItemId, string>();
+  const result = new Map<K, string>();
   const sphere = new THREE.Sphere();
-  for (const id of ids) {
-    const model = buildModel(id);
-    const pose = iconPose(id);
+  for (const { key, build, pose } of entries) {
+    const model = build();
     model.rotation.copy(pose.rot);
     loadOf(model)?.set(pose.fill);
     scene.add(model);
@@ -71,7 +83,7 @@ export function renderIcons(renderer: THREE.WebGLRenderer, ids: readonly ItemId[
     bctx.putImageData(img, 0, 0);
     octx.clearRect(0, 0, size, size);
     octx.drawImage(big, 0, 0, size, size);
-    result.set(id, out.toDataURL('image/png'));
+    result.set(key, out.toDataURL('image/png'));
 
     scene.remove(model);
     model.traverse((o) => { if (o instanceof THREE.Mesh && !(o instanceof THREE.InstancedMesh)) o.geometry.dispose(); });
