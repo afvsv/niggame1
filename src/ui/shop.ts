@@ -1,6 +1,6 @@
 import { SHOP_ITEMS, ItemDef, ItemId } from '../data/tools';
 import { fmtMoney } from '../core/format';
-import { fmtNumber, strands, t } from '../core/i18n';
+import { fmtNumber, rich, strands, t } from '../core/i18n';
 import type { Game } from '../game/Game';
 import { replay } from './hud';
 
@@ -11,7 +11,7 @@ const svg = (path: string) =>
 const LOCK = svg('<rect x="3.5" y="7" width="9" height="6.5" rx="1.5"/><path d="M5.5 7V5a2.5 2.5 0 0 1 5 0v2"/>');
 const CHECK = svg('<path d="M3.5 8.5l3 3 6-7"/>');
 
-/** Price tags show whole dollars without cents. */
+/** Whole-dollar prices drop the cents. */
 export const tagPrice = (v: number): string => (Number.isInteger(v) ? `$${v}` : fmtMoney(v));
 
 /** "Снабжение": the barn's supply board where tools and containers are bought. */
@@ -19,6 +19,7 @@ export class ShopScreen {
   private root = $('shop');
   private list = $('shop-list');
   private money = $('shop-money');
+  private count = $('shop-count');
   isOpen = false;
   onClose: (relock: boolean) => void = () => {};
   onBuyFail: () => void = () => {};
@@ -28,6 +29,7 @@ export class ShopScreen {
     $('shop-subtitle').textContent = t('shop.subtitle');
     $('shop-wallet-label').textContent = t('shop.wallet');
     $('shop-close').innerHTML = `${t('shop.close')} <kbd>E</kbd>`;
+    $('shop-keys').innerHTML = rich(t('shop.keys'));
     $('shop-close').addEventListener('click', () => this.close(true));
     this.root.addEventListener('mousedown', (e) => { if (e.target === this.root) this.close(true); });
     this.list.addEventListener('click', (e) => {
@@ -62,24 +64,26 @@ export class ShopScreen {
   private row(def: ItemDef, justBought?: ItemId): string {
     const { inv, money } = this.game;
     const state = inv.buyState(def.id, money);
-    const seg = (s: string) => `<span>${s.replace(/ (?=\S+$)/, '\u00a0')}</span>`; // keep units with numbers
+    const seg = (s: string) => `<span>${s}</span>`;
     const stats = def.kind === 'tool'
       ? `${seg(t('shop.grab', { strands: strands(def.grab) }))} · ${seg(t('shop.cooldown', { s: fmtNumber(def.cooldown) }))}`
       : seg(t('shop.capacity', { strands: strands(def.capacity) }));
-    let action: string;
-    if (state === 'owned') action = `<span class="status owned">${CHECK}${t('shop.owned')}</span>`;
-    else if (state === 'locked') action = `<span class="status locked">${LOCK}<span>${t('shop.requires', { item: t(`item.${def.requires}`) })}</span></span>`;
-    else if (state === 'poor') action = `<button class="btn" type="button" disabled>${t('shop.buy')}</button><span class="need">${t('shop.poor', { money: fmtMoney(def.price - money) })}</span>`;
-    else action = `<button class="btn primary" type="button" data-buy="${def.id}">${t('shop.buy')}</button>`;
-    return `<li class="row ${state}${justBought === def.id ? ' bought' : ''}">` +
+    let foot: string;
+    if (state === 'owned') foot = `<span class="status owned">${CHECK}${t('shop.owned')}</span>`;
+    else if (state === 'locked') foot = `<span class="price">${tagPrice(def.price)}</span><span class="status locked">${LOCK}${t('shop.requires', { item: t(`item.${def.requires}`) })}</span>`;
+    else if (state === 'poor') foot = `<span class="price">${tagPrice(def.price)}</span><span class="need">${t('shop.poor', { money: fmtMoney(def.price - money) })}</span>`;
+    else foot = `<span class="price">${tagPrice(def.price)}</span><button class="btn" type="button" data-buy="${def.id}">${t('shop.buy')}</button>`;
+    return `<li class="card ${state}${justBought === def.id ? ' bought' : ''}">` +
       `<div class="thumb"><img src="${this.icons.get(def.id) ?? ''}" alt="" draggable="false"></div>` +
-      `<div class="info"><div class="name">${t(`item.${def.id}`)}</div><div class="flavor">${t(`flavor.${def.id}`)}</div><div class="stats">${stats}</div></div>` +
-      `<div class="tag"><span>${tagPrice(def.price)}</span></div>` +
-      `<div class="action">${action}</div></li>`;
+      `<div class="body"><div class="cat ${def.kind}">${t(`shop.kind.${def.kind}`)}</div>` +
+      `<div class="name">${t(`item.${def.id}`)}</div><div class="stats">${stats}</div>` +
+      `<div class="foot">${foot}</div></div></li>`;
   }
 
   render(justBought?: ItemId): void {
     this.money.textContent = fmtMoney(this.game.money);
     this.list.innerHTML = SHOP_ITEMS.map((d) => this.row(d, justBought)).join('');
+    const owned = SHOP_ITEMS.filter((d) => this.game.inv.has(d.id)).length;
+    this.count.textContent = t('shop.count', { n: owned, total: SHOP_ITEMS.length });
   }
 }
