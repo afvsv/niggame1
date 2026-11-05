@@ -36,14 +36,18 @@ import { createLights, createSky } from './world/sky';
 import { loadTextures } from './gfx/assets';
 import { triplanarMaterial } from './gfx/triplanar';
 import { applyGraphics } from './gfx/quality';
-import { RESOLUTION_SCALE, Settings, detectGpu, loadSettings, presetForGpu, saveSettings } from './core/settings';
+import { Graphics, PRESETS, RESOLUTION_SCALE, Settings, detectGpu, loadSettings, presetForGpu, saveSettings } from './core/settings';
+import { BENCH_SECONDS, BenchPose, Benchmark, loadBench, pickPreset, saveBench } from './gfx/bench';
 import { SettingsScreen } from './ui/settings';
 
 const params = new URLSearchParams(location.search);
 if (params.has('reset')) clearSave();
 
 // Settings come first: language and MSAA are fixed at start.
-const recommended = presetForGpu(detectGpu(), matchMedia('(pointer: coarse)').matches);
+// The last performance test on this GPU beats a guess from its name.
+const gpu = detectGpu();
+const benchRecord = loadBench(gpu);
+const recommended = benchRecord?.preset ?? presetForGpu(gpu, matchMedia('(pointer: coarse)').matches);
 const settings = loadSettings(recommended);
 if (settings.lang !== 'auto') setLang(settings.lang);
 
@@ -227,9 +231,11 @@ function applySettings(s: Settings): void {
   audio.volume = s.volume;
   fpsEl.classList.toggle('hidden', !s.showFps);
 }
-const settingsScreen = new SettingsScreen(settings, recommended);
+const settingsScreen = new SettingsScreen(settings, recommended, benchRecord?.scores ?? null);
+settingsScreen.benchSeconds = BENCH_SECONDS;
+settingsScreen.onBench = () => startBench();
 settingsScreen.onChange = (s) => { saveSettings(s); applySettings(s); };
-settingsScreen.onClose = () => overlay.classList.remove('hidden');
+settingsScreen.onClose = () => { if (!bench) overlay.classList.remove('hidden'); };
 const settingsBtn = document.getElementById('overlay-settings')!;
 settingsBtn.textContent = t('settings.open');
 settingsBtn.addEventListener('click', (e) => {
@@ -294,7 +300,7 @@ input.onLockChange = (locked) => {
 
 // Saving
 function persist(): void {
-  if (saveDisabled) return;
+  if (saveDisabled || bench) return; // mid-test the player stands at a test spot
   writeSave({
     money: game.money, carried: game.carried, inv: inv.serialize(),
     player: { x: player.pos.x, y: player.pos.y, z: player.pos.z, yaw: player.yaw, pitch: player.pitch },
@@ -339,27 +345,110 @@ function adaptResolution(dt: number): void {
 
 applySettings(settings);
 
+// Performance test (Settings → "Performance test", or ?bench): every preset from the same spots,
+// then the best smooth one is applied and remembered for this GPU.
+const BENCH_POSES: BenchPose[] = [
+  { x: -2, z: 18.6, yaw: -0.35, pitch: 0 }, // spawn: the stack and most of the hangar
+  { x: -2, z: 8, yaw: 0, pitch: 0 }, // up close to the hay, where the player digs
+  { x: -1, z: -20.5, yaw: 3.0, pitch: 0.05 }, // along the hangar from the sell corner
+  { x: 3, z: 0, yaw: -Math.PI / 2, pitch: 0 }, // towards the door and the grass outside
+];
+const benchEl = document.getElementById('bench')!;
+const [benchKicker, benchTitle, benchText] = ['bench-kicker', 'bench-title', 'bench-text'].map((id) => document.getElementById(id)!);
+const benchBar = benchEl.querySelector<HTMLElement>('.bar i')!;
+let bench: Benchmark | null = null, benchBack: { g: Graphics; x: number; y: number; z: number; yaw: number; pitch: number } | null = null;
+let benchUi = 0, benchShadow = 0;
+function startBench(): void {
+  if (bench) return;
+  benchBack = { g: { ...settings.graphics }, x: player.pos.x, y: player.pos.y, z: player.pos.z, yaw: player.yaw, pitch: player.pitch };
+  bench = new Benchmark((p) => {
+    // MSAA is fixed when the page loads, so every preset runs with the current setting.
+    Object.assign(settings.graphics, PRESETS[p], { antialias: settings.graphics.antialias });
+    applySettings(settings);
+  }, BENCH_POSES);
+  settingsScreen.close(); // the pause card stays hidden while `bench` is set
+  overlay.classList.add('hidden'); // when started from ?bench, the pause card is still up
+  document.body.classList.add('benchmarking');
+  benchEl.classList.remove('hidden');
+  benchUi = benchShadow = 0;
+}
+function finishBench(ok: boolean): void {
+  if (!bench || !benchBack) return;
+  const b = bench, back = benchBack;
+  bench = benchBack = null;
+  if (ok && b.scores.length) {
+    const preset = pickPreset(b.scores);
+    Object.assign(settings.graphics, PRESETS[preset]);
+    saveBench({ gpu, preset, scores: b.scores });
+    settingsScreen.setBench(b.scores, preset);
+    console.info('[bench]', gpu, JSON.stringify(b.scores), '→', preset);
+  } else Object.assign(settings.graphics, back.g);
+  saveSettings(settings);
+  applySettings(settings);
+  player.pos.set(back.x, back.y, back.z);
+  player.vel.set(0, 0, 0);
+  player.yaw = back.yaw;
+  player.pitch = back.pitch;
+  renderer.shadowMap.needsUpdate = true;
+  document.body.classList.remove('benchmarking');
+  benchEl.classList.add('hidden');
+  settingsScreen.open();
+}
+/** Drives the camera during the test. `raw` is the unclamped frame interval. */
+function benchFrame(raw: number): void {
+  const b = bench!;
+  // A multi-second frame means the tab was hidden or the computer slept; such a run says nothing.
+  if (raw > 3) { console.info('[bench] cancelled: a frame took', raw.toFixed(1), 's'); finishBench(false); return; }
+  const p = b.tick(raw);
+  if (b.done) { finishBench(true); return; }
+  player.pos.set(p.x, 0, p.z);
+  player.vel.set(0, 0, 0);
+  player.yaw = p.yaw;
+  player.pitch = p.pitch;
+  // Digging refreshes the shadow map a few times a second; do the same so shadows cost what they do in play.
+  if ((benchShadow -= raw) <= 0) { benchShadow = 0.25; shadowDirty = true; }
+  if ((benchUi -= raw) <= 0) {
+    benchUi = 0.25;
+    benchKicker.textContent = t('bench.kicker', { n: b.step, total: b.steps });
+    benchTitle.textContent = t(`q.${b.preset}`);
+    benchText.textContent = t('bench.text', { fps: lastFps || '…' });
+    benchBar.style.width = `${Math.round(b.progress * 100)}%`;
+  }
+}
+window.addEventListener('keydown', (e) => { if (bench && e.code === 'Escape') finishBench(false); });
+document.addEventListener('visibilitychange', () => { if (document.hidden) finishBench(false); });
+if (params.has('bench')) setTimeout(startBench, 1500);
+
 // Main loop
-let last = performance.now(), fpsFrames = 0, fpsTime = 0;
+let last = performance.now(), fpsFrames = 0, fpsTime = 0, lastFps = 0, laggy = 0, perfHinted = false;
+let shadowDirty = false, shadowAt = 0;
 function countFps(elapsed: number): void {
   fpsFrames++;
   fpsTime += elapsed;
   if (fpsTime < 0.5) return;
-  const fps = Math.round(fpsFrames / fpsTime);
+  const fps = lastFps = Math.round(fpsFrames / fpsTime);
   if (settings.showFps) {
     fpsEl.textContent = `${fps} FPS · ${renderer.domElement.width}×${renderer.domElement.height}`;
     fpsEl.className = fps < 30 ? 'bad' : fps < 50 ? 'slow' : '';
+  }
+  // A long stutter in play after the auto resolution has done what it could: point to the test once.
+  if (input.locked && !bench && !perfHinted) {
+    const stuck = fps < 30 && (settings.graphics.resolution !== 'auto' || ratio <= 0.6 + 1e-6);
+    laggy = stuck ? laggy + fpsTime : Math.max(0, laggy - fpsTime);
+    if (laggy > 10) { perfHinted = true; hud.toast(t('perf.kicker'), t('perf.title'), t('perf.text'), 'needle', 7); }
   }
   fpsFrames = 0;
   fpsTime = 0;
 }
 const labelDir = new THREE.Vector3();
 function frame(now: number): void {
-  countFps(Math.max(0, now - last) / 1000);
+  const elapsed = Math.max(0, now - last) / 1000;
+  countFps(elapsed);
+  if (bench) benchFrame(elapsed);
   // rAF timestamps can precede `last` after a long first task, so clamp to [0, 50 ms].
   const dt = Math.max(0, Math.min(0.05, (now - last) / 1000));
   last = now;
-  if (!document.hidden && input.locked && settings.graphics.resolution === 'auto' && !params.has('fixedres')) adaptResolution(dt);
+  if (!document.hidden && input.locked && !bench && settings.graphics.resolution === 'auto' && !params.has('fixedres')) adaptResolution(dt);
   player.speedMul = game.d.speedMul;
   player.jumpSpeed = game.d.jumpSpeed;
   player.canSprint = !game.stamina.exhausted;
@@ -376,7 +465,9 @@ function frame(now: number): void {
   containers.update(dt, (id, x, z, maxY) => support(x, z, maxY, CONTAINER_WORLD[id].radius), capOf);
   needles.update(dt, grid, (x, z, maxY) => support(x, z, maxY, 0.04));
   const doorMoving = shed.update(dt);
-  if (stackView.changed || containers.moved || doorMoving) { renderer.shadowMap.needsUpdate = true; stackView.changed = containers.moved = false; }
+  if (stackView.changed || containers.moved || doorMoving) { shadowDirty = true; stackView.changed = containers.moved = false; }
+  // Each refresh draws the scene once more into the shadow map; 30 a second is plenty for digging and the door.
+  if (shadowDirty && now - shadowAt >= 33) { renderer.shadowMap.needsUpdate = true; shadowDirty = false; shadowAt = now; }
   particles.update(dt);
   const placed = inv.placed();
   tutorial.update({

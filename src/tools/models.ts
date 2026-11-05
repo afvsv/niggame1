@@ -125,6 +125,7 @@ export class HayLoad {
       this.mesh.setColorAt(i, STRAW[Math.floor(rnd() * STRAW.length)]);
     });
     this.mesh.count = 0;
+    this.mesh.visible = false; // an empty load would still cost a draw call in both passes
   }
 
   set(fill: number): void {
@@ -132,6 +133,7 @@ export class HayLoad {
     if (n === this.shown) return;
     this.shown = n;
     this.mesh.count = n;
+    this.mesh.visible = n > 0;
   }
 }
 
