@@ -343,3 +343,13 @@ body.in-tree #hud, body.in-tree #objective { visibility: hidden; }
   #tree-branch-now p { display: none; }
   .td-name { font-size: 22px; line-height: 26px; }
 }
+
+/* Performance test: the HUD steps aside, a toast-like card shows the preset being measured */
+body.benchmarking #hud, body.benchmarking #overlay { display: none; }
+#bench { position: fixed; left: 50%; top: 24px; transform: translateX(-50%); min-width: 320px; padding: 10px 24px 12px; text-align: center; background: rgba(12, 13, 10, .9); border: 1px solid var(--gold); box-shadow: 0 12px 40px rgba(0, 0, 0, .5); pointer-events: none; font-variant-numeric: tabular-nums; }
+#bench.hidden { display: none; }
+#bench-kicker { font-size: 11px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; color: var(--yellow); }
+#bench-title { font-size: 30px; line-height: 36px; font-weight: 700; text-transform: uppercase; color: var(--text); }
+#bench-text { font-size: 13px; font-weight: 600; color: var(--text-2); }
+#bench .bar { height: 3px; margin-top: 8px; background: rgba(230, 222, 190, .14); }
+#bench .bar i { display: block; height: 100%; width: 0; background: var(--yellow); }
