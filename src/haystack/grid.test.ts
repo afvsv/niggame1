@@ -16,14 +16,15 @@ describe('HayGrid', () => {
     expect(g.total).toBe(0);
   });
 
-  it('marks chunks dirty only when solidity changes', () => {
+  it('marks the chunk dirty on partial removal, but not on a no-op', () => {
     const g = make();
     g.set(5, 5, 5, 10);
     g.dirtyChunks.clear();
-    g.remove(5, 5, 5, 3);
+    g.remove(5, 5, 5, 0);
     expect(g.dirtyChunks.size).toBe(0);
-    g.remove(5, 5, 5, 7);
-    expect(g.dirtyChunks.size).toBeGreaterThan(0);
+    g.remove(5, 5, 5, 3);
+    expect(g.dirtyChunks.has(g.chunkKey(0, 0, 0))).toBe(true);
+    expect(g.dirtyChunks.size).toBe(1);
   });
 
   it('marks neighbour chunk dirty at a chunk border', () => {

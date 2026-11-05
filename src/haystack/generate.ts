@@ -42,9 +42,17 @@ export function generateStack(grid: HayGrid, shape: StackShape): void {
       const n = noise(wx * 0.35 + 50, wz * 0.35 + 50) * 0.7 + noise(wx * 1.3 + 9, wz * 1.3 + 9) * 0.3;
       const r = Math.hypot(wx, wz) / (shape.radiusM * (1 + 0.07 * n));
       if (r >= 1) continue;
-      const h = shape.heightM * Math.pow(1 - r * r, 0.65) + n * 0.35;
-      const hc = Math.min(grid.ny, Math.floor(h / s));
-      for (let y = 0; y < hc; y++) grid.data[grid.index(x, y, z)] = grid.cellMax;
+      const lumps = noise(wx * 2.6 + 31, wz * 2.6 + 17) * 0.12;
+      const h = shape.heightM * Math.pow(1 - r * r, 0.65) + n * 0.35 + lumps;
+      const cells = h / s;
+      const full = Math.min(grid.ny, Math.floor(cells));
+      for (let y = 0; y < full; y++) grid.data[grid.index(x, y, z)] = grid.cellMax;
+      // Partial top cell so the smooth surface sits at the exact height (see mesher density).
+      const t = cells - full - 0.5;
+      if (full < grid.ny && t > 0.04) {
+        const d = 0.5 / (1 - t);
+        grid.data[grid.index(x, full, z)] = Math.max(1, Math.min(grid.cellMax, Math.round(((d - 0.52) / 0.48) * grid.cellMax)));
+      }
     }
   }
   grid.recount();

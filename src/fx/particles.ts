@@ -1,70 +1,76 @@
 import * as THREE from 'three';
+import { strawGeometry } from '../world/straws';
 
-const MAX = 400;
+const MAX = 360;
+const COLORS = ['#e3c47a', '#d6b060', '#c09445', '#efdb9c', '#b99b58'].map((c) => new THREE.Color(c));
 
-/** A few crossed straw strokes on a transparent background. */
-function strawSprite(): THREE.CanvasTexture {
-  const c = document.createElement('canvas');
-  c.width = c.height = 32;
-  const ctx = c.getContext('2d')!;
-  ctx.lineCap = 'round';
-  const strokes: Array<[string, number, number, number, number]> = [
-    ['#d9b45a', 5, 24, 27, 9], ['#b98f3e', 9, 8, 24, 27], ['#ecd08a', 4, 15, 29, 17],
-  ];
-  for (const [col, x1, y1, x2, y2] of strokes) {
-    ctx.strokeStyle = col;
-    ctx.lineWidth = 2.5;
-    ctx.beginPath();
-    ctx.moveTo(x1, y1);
-    ctx.lineTo(x2, y2);
-    ctx.stroke();
-  }
-  const tex = new THREE.CanvasTexture(c);
-  tex.colorSpace = THREE.SRGBColorSpace;
-  return tex;
-}
-
-/** Cheap straw bits flying off when digging. */
+/** Real little straws that fly off when digging, flutter down and settle on the floor. */
 export class HayParticles {
-  readonly points: THREE.Points;
+  readonly object: THREE.InstancedMesh;
   private readonly pos = new Float32Array(MAX * 3);
   private readonly vel = new Float32Array(MAX * 3);
+  private readonly rot = new Float32Array(MAX * 3);
+  private readonly spin = new Float32Array(MAX * 3);
+  private readonly len = new Float32Array(MAX);
   private readonly life = new Float32Array(MAX);
   private next = 0;
+  private readonly m = new THREE.Matrix4();
+  private readonly q = new THREE.Quaternion();
+  private readonly e = new THREE.Euler();
+  private readonly p = new THREE.Vector3();
+  private readonly s = new THREE.Vector3();
+  private readonly zero = new THREE.Matrix4().makeScale(0, 0, 0);
 
   constructor() {
-    const geo = new THREE.BufferGeometry();
-    geo.setAttribute('position', new THREE.BufferAttribute(this.pos, 3).setUsage(THREE.DynamicDrawUsage));
-    const mat = new THREE.PointsMaterial({ map: strawSprite(), color: '#b39256', size: 0.09, sizeAttenuation: true, alphaTest: 0.5 });
-    this.points = new THREE.Points(geo, mat);
-    this.points.frustumCulled = false;
-    for (let i = 0; i < MAX; i++) this.pos[i * 3 + 1] = -100;
+    this.object = new THREE.InstancedMesh(strawGeometry(), new THREE.MeshStandardMaterial({ roughness: 0.6 }), MAX);
+    this.object.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
+    this.object.frustumCulled = false;
+    const c = new THREE.Color();
+    for (let i = 0; i < MAX; i++) {
+      this.object.setMatrixAt(i, this.zero);
+      this.object.setColorAt(i, c.copy(COLORS[i % COLORS.length]).multiplyScalar(0.8 + Math.random() * 0.3));
+    }
   }
 
   burst(x: number, y: number, z: number, nx: number, ny: number, nz: number, count: number): void {
     for (let k = 0; k < count; k++) {
       const i = this.next;
       this.next = (this.next + 1) % MAX;
-      this.pos[i * 3] = x + (Math.random() - 0.5) * 0.15;
-      this.pos[i * 3 + 1] = y + (Math.random() - 0.5) * 0.15;
-      this.pos[i * 3 + 2] = z + (Math.random() - 0.5) * 0.15;
-      this.vel[i * 3] = nx * 1.2 + (Math.random() - 0.5) * 1.6;
-      this.vel[i * 3 + 1] = ny * 1.2 + 0.8 + Math.random() * 1.4;
-      this.vel[i * 3 + 2] = nz * 1.2 + (Math.random() - 0.5) * 1.6;
-      this.life[i] = 0.5 + Math.random() * 0.5;
+      const r = () => Math.random() - 0.5;
+      this.pos.set([x + r() * 0.2, y + r() * 0.2, z + r() * 0.2], i * 3);
+      this.vel.set([nx * 0.6 + r() * 2.0, ny * 0.6 + 1.0 + Math.random() * 1.4, nz * 0.6 + r() * 2.0], i * 3);
+      this.rot.set([Math.random() * 6.28, Math.random() * 6.28, Math.random() * 6.28], i * 3);
+      this.spin.set([r() * 14, r() * 14, r() * 14], i * 3);
+      this.len[i] = 0.06 + Math.random() * 0.12;
+      this.life[i] = 1.4 + Math.random() * 1.2;
     }
   }
 
   update(dt: number): void {
+    const P = this.pos, V = this.vel, R = this.rot, S = this.spin;
+    const drag = Math.exp(-2.2 * dt);
     for (let i = 0; i < MAX; i++) {
       if (this.life[i] <= 0) continue;
       this.life[i] -= dt;
-      if (this.life[i] <= 0) { this.pos[i * 3 + 1] = -100; continue; }
-      this.vel[i * 3 + 1] -= 6 * dt;
-      this.pos[i * 3] += this.vel[i * 3] * dt;
-      this.pos[i * 3 + 1] += this.vel[i * 3 + 1] * dt;
-      this.pos[i * 3 + 2] += this.vel[i * 3 + 2] * dt;
+      const o = i * 3;
+      if (this.life[i] <= 0) { this.object.setMatrixAt(i, this.zero); continue; }
+      if (P[o + 1] > 0.012) {
+        V[o + 1] -= 7 * dt;
+        V[o] *= drag; V[o + 1] *= drag; V[o + 2] *= drag;
+        P[o] += V[o] * dt; P[o + 1] += V[o + 1] * dt; P[o + 2] += V[o + 2] * dt;
+        R[o] += S[o] * dt; R[o + 1] += S[o + 1] * dt; R[o + 2] += S[o + 2] * dt;
+      } else {
+        P[o + 1] = 0.012; // settle flat on the floor
+        R[o] = 0; R[o + 2] *= 0.9;
+      }
+      const fade = Math.min(1, this.life[i] * 2.5);
+      this.e.set(R[o], R[o + 1], R[o + 2]);
+      this.q.setFromEuler(this.e);
+      this.p.set(P[o], P[o + 1], P[o + 2]);
+      this.s.set(this.len[i] * fade, 0.0028, 0.0028);
+      this.m.compose(this.p, this.q, this.s);
+      this.object.setMatrixAt(i, this.m);
     }
-    (this.points.geometry.getAttribute('position') as THREE.BufferAttribute).needsUpdate = true;
+    this.object.instanceMatrix.needsUpdate = true;
   }
 }

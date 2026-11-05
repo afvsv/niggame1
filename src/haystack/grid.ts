@@ -2,7 +2,7 @@ export const CHUNK = 16;
 
 /**
  * Voxel grid of hay. Each cell stores how many strands are left in it (0 = empty).
- * Mesh only cares whether a cell is solid, so partial removal does not dirty chunks.
+ * The smooth mesh follows fill levels, so any change dirties the chunk (and neighbours at borders).
  */
 export class HayGrid {
   readonly data: Uint8Array;
@@ -47,7 +47,7 @@ export class HayGrid {
     if (old === v) return;
     this.data[i] = v;
     this.total += v - old;
-    if ((old > 0) !== (v > 0)) this.markDirtyAround(x, y, z);
+    this.markDirtyAround(x, y, z);
   }
 
   /** Removes up to `amount` strands from a cell, returns how many were removed. */
@@ -70,11 +70,11 @@ export class HayGrid {
     return [cx, cy, cz];
   }
 
-  /** A change can affect faces and AO of neighbouring chunks, so mark the 3x3x3 neighbourhood. */
+  /** A change moves vertices and occlusion up to two cells away, so mark chunks within that reach. */
   private markDirtyAround(x: number, y: number, z: number): void {
-    for (let dy = -1; dy <= 1; dy++)
-      for (let dz = -1; dz <= 1; dz++)
-        for (let dx = -1; dx <= 1; dx++) {
+    for (let dy = -2; dy <= 2; dy += 2)
+      for (let dz = -2; dz <= 2; dz += 2)
+        for (let dx = -2; dx <= 2; dx += 2) {
           const cx = Math.floor((x + dx) / CHUNK);
           const cy = Math.floor((y + dy) / CHUNK);
           const cz = Math.floor((z + dz) / CHUNK);
