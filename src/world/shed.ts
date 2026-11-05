@@ -120,6 +120,8 @@ export interface Shed {
   spawn: THREE.Vector3;
   spawnYaw: number;
   update(dt: number): void;
+  /** Parts the graphics settings thin out or hide. */
+  quality: { grass: THREE.InstancedMesh[]; floorStraws: THREE.InstancedMesh; beams: THREE.Object3D };
 }
 
 const HALF = BARN_HALF; // barn half-size, metres
@@ -304,7 +306,8 @@ export function buildShed(scene: THREE.Scene, colliders: Colliders, tex: Texture
   colliders.addBox({ minX: 9.5, maxX: 10.3, minY: 0, maxY: 1.0, minZ: 2.4, maxZ: 5.9 });
 
   // Loose straws on the floor.
-  group.add(floorStraws(4200, BALANCE.stack.radiusM, mulberry32(5)));
+  const strawCarpet = floorStraws(4200, BALANCE.stack.radiusM, mulberry32(5));
+  group.add(strawCarpet);
 
   // Selling counter near the front.
   const counter = new THREE.Group();
@@ -377,7 +380,8 @@ export function buildShed(scene: THREE.Scene, colliders: Colliders, tex: Texture
 
   return {
     group, counter, shop, spawn: new THREE.Vector3(1.5, 0, 9.2), spawnYaw: 0,
-    update: (dt) => { nature.update(dt); beams.update(dt); },
+    update: (dt) => { nature.update(dt); if (beams.group.visible) beams.update(dt); },
+    quality: { grass: nature.grassPatches, floorStraws: strawCarpet, beams: beams.group },
   };
 }
 
