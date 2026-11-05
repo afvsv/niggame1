@@ -1,4 +1,6 @@
 import type { InventorySave } from '../game/Inventory';
+import type { NeedleSave } from '../game/needles';
+import type { Stats } from '../game/Game';
 import { HayGrid } from '../haystack/grid';
 
 const KEY = 'niggame.save.v1';
@@ -10,6 +12,11 @@ export interface SaveData {
   grid: string;
   player: { x: number; y: number; z: number; yaw: number; pitch: number };
   inv?: InventorySave; // added in 0.2; older saves start with bare hands
+  // Added in 0.3 (the locked barn). Missing in older saves: needles are hidden again.
+  needles?: NeedleSave[];
+  tutorial?: number;
+  stats?: Stats;
+  escaped?: boolean;
 }
 
 export function loadSave(): SaveData | null {

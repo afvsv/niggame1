@@ -29,7 +29,7 @@ const COLORS = ['#e3c47a', '#d6b060', '#c09445', '#efdb9c', '#a98a46', '#b99b58'
  * Loose straws lying on the barn floor: a thick skirt around the stack base,
  * a trail towards the counter and a light sprinkle everywhere else.
  */
-export function floorStraws(count: number, stackRadius: number, rnd: () => number): THREE.InstancedMesh {
+export function floorStraws(count: number, stackRadius: number, rnd: () => number, area: { hx: number; hz: number; counter: [number, number] }): THREE.InstancedMesh {
   const mat = new THREE.MeshStandardMaterial({ roughness: 0.6 });
   const mesh = new THREE.InstancedMesh(strawGeometry(), mat, count);
   const m = new THREE.Matrix4(), q = new THREE.Quaternion(), e = new THREE.Euler(), s = new THREE.Vector3(), p = new THREE.Vector3();
@@ -41,10 +41,11 @@ export function floorStraws(count: number, stackRadius: number, rnd: () => numbe
       const a = rnd() * Math.PI * 2, r = stackRadius - 0.6 + Math.pow(rnd(), 1.8) * 3.6;
       x = Math.cos(a) * r; z = Math.sin(a) * r;
     } else if (kind < 0.8) { // trail to the counter
-      const t = rnd();
-      x = 1.5 + t * 3 + (rnd() - 0.5) * 2.2; z = 5.5 + t * 2.6 + (rnd() - 0.5) * 1.6;
+      const t = rnd(), [cx, cz] = area.counter;
+      const sx = cx * (stackRadius / Math.hypot(cx, cz)), sz = cz * (stackRadius / Math.hypot(cx, cz));
+      x = sx + t * (cx - sx) + (rnd() - 0.5) * 2.2; z = sz + t * (cz - sz - 0.8) + (rnd() - 0.5) * 1.6;
     } else { // sprinkle
-      x = (rnd() - 0.5) * 21; z = (rnd() - 0.5) * 21;
+      x = (rnd() - 0.5) * 2 * (area.hx - 0.3); z = (rnd() - 0.5) * 2 * (area.hz - 0.3);
     }
     const len = 0.08 + rnd() * 0.22, rad = 0.003 + rnd() * 0.002;
     e.set((rnd() - 0.5) * 0.25, rnd() * Math.PI * 2, (rnd() - 0.5) * 0.2);

@@ -9,6 +9,11 @@ export class Colliders {
 
   addBox(b: AABB): void { this.boxes.push(b); }
 
+  remove(b: AABB): void {
+    const i = this.boxes.indexOf(b);
+    if (i >= 0) this.boxes.splice(i, 1);
+  }
+
   collides(b: AABB): boolean {
     if (b.minY < 0) return true;
     for (const o of this.boxes) {

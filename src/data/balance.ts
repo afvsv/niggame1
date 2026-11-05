@@ -6,11 +6,11 @@ export const BALANCE = {
     pricePerStrand: 0.04, // $ per strand at the counter
   },
   stack: {
-    gridX: 64,
-    gridY: 48,
-    gridZ: 64,
-    radiusM: 6.2,
-    heightM: 8.5,
+    gridX: 80,
+    gridY: 56,
+    gridZ: 80,
+    radiusM: 7.4,
+    heightM: 10,
     seed: 1337,
   },
   player: {
@@ -24,6 +24,7 @@ export const BALANCE = {
     stepHeight: 0.45,
     mouseSensitivity: 0.0022,
   },
-  reachM: 2.8, // tools and containers live in data/tools.ts
+  reachM: 2.8, // tools and containers live in data/tools.ts, needles in data/needles.ts
+  gravity: 18, // dropped containers and needles
   autosaveSeconds: 15,
 } as const;
