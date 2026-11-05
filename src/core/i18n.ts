@@ -4,6 +4,7 @@ type Dict = Record<string, string>;
 const ru: Dict = {
   'title': 'Иголка в стоге',
   'overlay.start': 'Кликни, чтобы начать',
+  'overlay.loading': 'Раскладываем сено…',
   'overlay.paused': 'Пауза. Кликни, чтобы продолжить',
   'overlay.reset': 'Сбросить прогресс',
   'overlay.resetConfirm': 'Точно сбросить весь прогресс?',
@@ -53,6 +54,7 @@ const ru: Dict = {
 const en: Dict = {
   'title': 'Needle in a Haystack',
   'overlay.start': 'Click to start',
+  'overlay.loading': 'Spreading the hay…',
   'overlay.paused': 'Paused. Click to continue',
   'overlay.reset': 'Reset progress',
   'overlay.resetConfirm': 'Really reset all progress?',

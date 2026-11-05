@@ -13,7 +13,6 @@ import { Game, GameEvents } from './game/Game';
 import { Inventory } from './game/Inventory';
 import { generateStack } from './haystack/generate';
 import { HayGrid } from './haystack/grid';
-import { createHayTexture } from './haystack/hayTexture';
 import { HaystackView } from './haystack/HaystackView';
 import { PlayerController } from './player/PlayerController';
 import { renderIcons } from './tools/icons';
@@ -23,6 +22,9 @@ import { Hud } from './ui/hud';
 import { ShopScreen } from './ui/shop';
 import { Colliders } from './world/colliders';
 import { buildShed } from './world/shed';
+import { createLights, createSky } from './world/sky';
+import { loadTextures } from './gfx/assets';
+import { triplanarMaterial } from './gfx/triplanar';
 
 const params = new URLSearchParams(location.search);
 if (params.has('reset')) clearSave();
@@ -40,24 +42,35 @@ renderer.setPixelRatio(Math.min(window.devicePixelRatio, 1.5));
 renderer.setSize(window.innerWidth, window.innerHeight);
 renderer.outputColorSpace = THREE.SRGBColorSpace;
 renderer.toneMapping = THREE.ACESFilmicToneMapping;
+renderer.toneMappingExposure = 1.0;
 renderer.autoClear = false; // world pass, then the held tool on top
 app.appendChild(renderer.domElement);
 const scene = new THREE.Scene();
-const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.05, 300);
+const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.08, 600);
+
+// Procedural PBR textures are generated in workers while the page shows a loading line.
+const overlayText = document.getElementById('overlay-text')!;
+document.getElementById('overlay-title')!.textContent = t('title');
+overlayText.textContent = t('overlay.loading');
+const tex = await loadTextures(renderer, (d, n) => { overlayText.textContent = `${t('overlay.loading')} ${Math.round((d / n) * 100)}%`; });
+createSky(scene, renderer);
+createLights(scene, renderer);
 
 // Haystack
 const H = BALANCE.hay, S = BALANCE.stack;
 const grid = new HayGrid(S.gridX, S.gridY, S.gridZ, H.cellSize, (-S.gridX * H.cellSize) / 2, 0, (-S.gridZ * H.cellSize) / 2, H.cellMaxStrands);
 const save = loadSave();
 if (!save || !grid.deserialize(save.grid)) generateStack(grid, S);
-const hayMat = new THREE.MeshLambertMaterial({ map: createHayTexture(renderer), vertexColors: true });
-const stackView = new HaystackView(grid, hayMat);
+const hayLook = { set: tex.hay, tile: 1.6, variation: tex.variation, variationTile: 7, brightness: 0.3, tint: '#d0b070', tintAmount: 0.3 };
+const hayMat = triplanarMaterial({ ...hayLook, vertexColors: true });
+const strawMat = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.65, envMapIntensity: 0.5 });
+const stackView = new HaystackView(grid, [hayMat, strawMat]);
 scene.add(stackView.group);
 stackView.update(Infinity);
 
 // World, player, systems
 const colliders = new Colliders(grid);
-const shed = buildShed(scene, colliders);
+const shed = buildShed(scene, colliders, tex, triplanarMaterial(hayLook));
 const input = new Input(renderer.domElement);
 const player = new PlayerController(colliders, camera);
 if (save) {
@@ -69,7 +82,7 @@ if (save) {
   player.yaw = shed.spawnYaw;
 }
 const particles = new HayParticles();
-scene.add(particles.points);
+scene.add(particles.object);
 const audio = new Audio();
 const hud = new Hud();
 const inv = new Inventory();
@@ -112,8 +125,6 @@ hotbar.render(inv);
 
 // Overlay / pointer lock / screens
 const overlay = document.getElementById('overlay')!;
-const overlayText = document.getElementById('overlay-text')!;
-document.getElementById('overlay-title')!.textContent = t('title');
 overlayText.textContent = t('overlay.start');
 document.getElementById('overlay-controls')!.innerHTML = ['controls.move', 'controls.dig', 'controls.sell', 'controls.tools'].map((k) => `<li>${rich(t(k))}</li>`).join('');
 const resetBtn = document.getElementById('overlay-reset')!;
@@ -166,18 +177,38 @@ window.addEventListener('resize', () => {
   vm.setAspect(camera.aspect);
 });
 
+// Adaptive resolution: drop the pixel ratio on slow GPUs, never climb back to a level that was too slow.
+let ratioCap = Math.min(window.devicePixelRatio, 1.5), ratio = ratioCap, slowT = 0, fastT = 0;
+function adaptResolution(dt: number): void {
+  slowT = dt > 1 / 40 ? slowT + dt : Math.max(0, slowT - dt * 0.5);
+  fastT = dt < 1 / 55 ? fastT + dt : 0;
+  if (slowT > 1.5 && ratio > 0.6) {
+    ratioCap = ratio;
+    ratio = Math.max(0.6, ratio - 0.15);
+    renderer.setPixelRatio(ratio);
+    slowT = 0;
+  } else if (fastT > 6 && ratio + 0.1 < ratioCap) {
+    ratio += 0.1;
+    renderer.setPixelRatio(ratio);
+    fastT = 0;
+  }
+}
+
 // Main loop
 let last = performance.now();
 function frame(now: number): void {
   // rAF timestamps can precede `last` after a long first task, so clamp to [0, 50 ms].
   const dt = Math.max(0, Math.min(0.05, (now - last) / 1000));
   last = now;
+  if (!document.hidden && input.locked && !params.has("fixedres")) adaptResolution(dt);
   player.update(dt, input);
   game.update(dt);
   vm.update(dt, { speed: Math.hypot(player.vel.x, player.vel.z), onGround: player.onGround, mouseDX: input.mouseDX, mouseDY: input.mouseDY });
   vm.setLoad(game.carried / game.capacity);
   camera.rotation.x -= vm.kick * 0.008; // visual-only nod on each swing; the player resets rotation next frame
-  stackView.update(6);
+  stackView.update(5);
+  if (stackView.changed) { renderer.shadowMap.needsUpdate = true; stackView.changed = false; }
+  shed.update(dt);
   particles.update(dt);
   hud.update({
     money: game.money,
@@ -197,4 +228,4 @@ function frame(now: number): void {
 requestAnimationFrame(frame);
 
 // Debug handle for tests and the browser console.
-(window as unknown as { __game: unknown }).__game = { game, player, grid, renderer, camera, persist, inv, shop, icons, vm };
+(window as unknown as { __game: unknown }).__game = { game, player, grid, renderer, camera, scene, persist, inv, shop, icons, vm };
