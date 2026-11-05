@@ -8,7 +8,8 @@
     "build": "tsc --noEmit && vite build",
     "preview": "vite preview",
     "typecheck": "tsc --noEmit",
-    "test": "vitest run"
+    "test": "vitest run",
+    "sim": "vite build --ssr tools/sim/run.ts --outDir .sim --emptyOutDir --logLevel warn && node .sim/run.js"
   },
   "dependencies": {
     "@fontsource-variable/roboto-condensed": "^5.3.0",
