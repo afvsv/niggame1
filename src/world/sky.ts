@@ -71,7 +71,7 @@ export function createSky(scene: THREE.Scene, renderer: THREE.WebGLRenderer): TH
   scene.environment = pmrem.fromScene(envScene, 0.02, 0.1, 1000).texture;
   pmrem.dispose();
   scene.add(sky);
-  scene.fog = new THREE.Fog(new THREE.Color(0.62, 0.74, 0.86), 45, 320);
+  scene.fog = new THREE.Fog(new THREE.Color(0.62, 0.76, 0.9), 70, 480);
   return sky;
 }
 

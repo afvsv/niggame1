@@ -107,14 +107,14 @@ transformed.xz += vec2(0.7, 0.35) * sway * 0.05 * position.y * position.y * 16.0
 
   private hills(): THREE.Mesh {
     const N = new Noise(5);
-    const seg = 128, rings = 8, r0 = 170, r1 = 420;
+    const seg = 128, rings = 8, r0 = 120, r1 = 340;
     const pos: number[] = [], col: number[] = [], idx: number[] = [];
-    const near = new THREE.Color('#58743a'), far = new THREE.Color('#6f8c74');
+    const near = new THREE.Color('#5a7a36'), far = new THREE.Color('#7a9682');
     for (let r = 0; r <= rings; r++) {
       const t = r / rings, rad = r0 + (r1 - r0) * t;
       for (let s = 0; s <= seg; s++) {
         const a = (s / seg) * Math.PI * 2;
-        const h = (N.fbm((s / seg) * 6, t * 2, 4, 6, 256) * 0.5 + 0.5) * (18 + t * 40) * Math.min(1, t * 3);
+        const h = (N.fbm((s / seg) * 6, t * 2, 4, 6, 256) * 0.5 + 0.5) * (14 + t * 42) * Math.min(1, t * 4);
         pos.push(Math.cos(a) * rad, h - 2, Math.sin(a) * rad);
         const c = near.clone().lerp(far, t);
         col.push(c.r, c.g, c.b);
@@ -123,7 +123,7 @@ transformed.xz += vec2(0.7, 0.35) * sway * 0.05 * position.y * position.y * 16.0
     for (let r = 0; r < rings; r++)
       for (let s = 0; s < seg; s++) {
         const a = r * (seg + 1) + s, b = a + seg + 1;
-        idx.push(a, b, a + 1, a + 1, b, b + 1);
+        idx.push(a, a + 1, b, a + 1, b + 1, b);
       }
     const g = new THREE.BufferGeometry();
     g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
