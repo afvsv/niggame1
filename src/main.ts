@@ -4,7 +4,7 @@ import './style.css';
 import { BALANCE } from './data/balance';
 import { Audio } from './core/audio';
 import { fmtMoney } from './core/format';
-import { rich, t } from './core/i18n';
+import { rich, setLang, t } from './core/i18n';
 import { Input } from './core/input';
 import { clearSave, loadSave, writeSave } from './core/save';
 import { HayParticles } from './fx/particles';
@@ -25,9 +25,17 @@ import { buildShed } from './world/shed';
 import { createLights, createSky } from './world/sky';
 import { loadTextures } from './gfx/assets';
 import { triplanarMaterial } from './gfx/triplanar';
+import { applyGraphics } from './gfx/quality';
+import { RESOLUTION_SCALE, Settings, detectGpu, loadSettings, presetForGpu, saveSettings } from './core/settings';
+import { SettingsScreen } from './ui/settings';
 
 const params = new URLSearchParams(location.search);
 if (params.has('reset')) clearSave();
+
+// Settings come first: language and MSAA are fixed at start.
+const recommended = presetForGpu(detectGpu(), matchMedia('(pointer: coarse)').matches);
+const settings = loadSettings(recommended);
+if (settings.lang !== 'auto') setLang(settings.lang);
 
 // Canvas signs and the HUD use Roboto Condensed; wait briefly so the first frame does not flash a fallback font.
 await Promise.race([
@@ -37,7 +45,7 @@ await Promise.race([
 
 // Renderer & camera
 const app = document.getElementById('app')!;
-const renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: 'high-performance' });
+const renderer = new THREE.WebGLRenderer({ antialias: settings.graphics.antialias, powerPreference: 'high-performance' });
 renderer.setPixelRatio(Math.min(window.devicePixelRatio, 1.5));
 renderer.setSize(window.innerWidth, window.innerHeight);
 renderer.outputColorSpace = THREE.SRGBColorSpace;
@@ -54,7 +62,7 @@ document.getElementById('overlay-title')!.textContent = t('title');
 overlayText.textContent = t('overlay.loading');
 const tex = await loadTextures(renderer, (d, n) => { overlayText.textContent = `${t('overlay.loading')} ${Math.round((d / n) * 100)}%`; });
 createSky(scene, renderer);
-createLights(scene, renderer);
+const sun = createLights(scene, renderer);
 
 // Haystack
 const H = BALANCE.hay, S = BALANCE.stack;
@@ -137,7 +145,39 @@ resetBtn.addEventListener('click', (e) => {
   clearSave();
   location.reload();
 });
-const showPause = () => { overlayText.textContent = t('overlay.paused'); overlay.classList.remove('hidden'); };
+const showPause = () => { overlayText.textContent = t('overlay.paused'); if (!settingsScreen.isOpen) overlay.classList.remove('hidden'); };
+
+// Settings
+const fpsEl = document.getElementById('fps')!;
+const quality = { renderer, sun, ...shed.quality, stackStraws: strawMat };
+function applySettings(s: Settings): void {
+  applyGraphics(quality, s.graphics);
+  setResolution(s.graphics.resolution);
+  camera.fov = s.fov;
+  camera.updateProjectionMatrix();
+  player.sensitivity = s.sensitivity;
+  audio.volume = s.volume;
+  fpsEl.classList.toggle('hidden', !s.showFps);
+}
+const settingsScreen = new SettingsScreen(settings, recommended);
+settingsScreen.onChange = (s) => { saveSettings(s); applySettings(s); };
+settingsScreen.onClose = () => overlay.classList.remove('hidden');
+const settingsBtn = document.getElementById('overlay-settings')!;
+settingsBtn.textContent = t('settings.open');
+settingsBtn.addEventListener('click', (e) => {
+  e.stopPropagation();
+  overlay.classList.add('hidden');
+  settingsScreen.open();
+});
+document.getElementById('overlay-actions')!.classList.remove('hidden');
+window.addEventListener('keydown', (e) => {
+  if (e.code !== 'F3') return;
+  e.preventDefault(); // browsers bind F3 to "find next"
+  settings.showFps = !settings.showFps;
+  saveSettings(settings);
+  fpsEl.classList.toggle('hidden', !settings.showFps);
+  settingsScreen.refresh();
+});
 overlay.addEventListener('click', () => { audio.unlock(); input.requestLock(); });
 
 const shop = new ShopScreen(game, icons);
@@ -177,8 +217,15 @@ window.addEventListener('resize', () => {
   vm.setAspect(camera.aspect);
 });
 
-// Adaptive resolution: drop the pixel ratio on slow GPUs, never climb back to a level that was too slow.
+// Resolution: fixed scale of the screen, or adaptive — drop the pixel ratio on slow GPUs and
+// never climb back to a level that was too slow.
 let ratioCap = Math.min(window.devicePixelRatio, 1.5), ratio = ratioCap, slowT = 0, fastT = 0;
+function setResolution(r: Settings['graphics']['resolution']): void {
+  if (r === 'auto') ratioCap = ratio = Math.min(window.devicePixelRatio, 1.5);
+  else ratio = RESOLUTION_SCALE[r] * Math.min(window.devicePixelRatio, 2);
+  slowT = fastT = 0;
+  renderer.setPixelRatio(ratio);
+}
 function adaptResolution(dt: number): void {
   slowT = dt > 1 / 40 ? slowT + dt : Math.max(0, slowT - dt * 0.5);
   fastT = dt < 1 / 55 ? fastT + dt : 0;
@@ -194,13 +241,28 @@ function adaptResolution(dt: number): void {
   }
 }
 
+applySettings(settings);
+
 // Main loop
-let last = performance.now();
+let last = performance.now(), fpsFrames = 0, fpsTime = 0;
+function countFps(elapsed: number): void {
+  fpsFrames++;
+  fpsTime += elapsed;
+  if (fpsTime < 0.5) return;
+  const fps = Math.round(fpsFrames / fpsTime);
+  if (settings.showFps) {
+    fpsEl.textContent = `${fps} FPS · ${renderer.domElement.width}×${renderer.domElement.height}`;
+    fpsEl.className = fps < 30 ? 'bad' : fps < 50 ? 'slow' : '';
+  }
+  fpsFrames = 0;
+  fpsTime = 0;
+}
 function frame(now: number): void {
+  countFps(Math.max(0, now - last) / 1000);
   // rAF timestamps can precede `last` after a long first task, so clamp to [0, 50 ms].
   const dt = Math.max(0, Math.min(0.05, (now - last) / 1000));
   last = now;
-  if (!document.hidden && input.locked && !params.has("fixedres")) adaptResolution(dt);
+  if (!document.hidden && input.locked && settings.graphics.resolution === 'auto' && !params.has('fixedres')) adaptResolution(dt);
   player.update(dt, input);
   game.update(dt);
   vm.update(dt, { speed: Math.hypot(player.vel.x, player.vel.z), onGround: player.onGround, mouseDX: input.mouseDX, mouseDY: input.mouseDY });
@@ -228,4 +290,4 @@ function frame(now: number): void {
 requestAnimationFrame(frame);
 
 // Debug handle for tests and the browser console.
-(window as unknown as { __game: unknown }).__game = { game, player, grid, renderer, camera, scene, persist, inv, shop, icons, vm };
+(window as unknown as { __game: unknown }).__game = { game, player, grid, renderer, camera, scene, persist, inv, shop, icons, vm, settings, settingsScreen, applySettings, sun };
