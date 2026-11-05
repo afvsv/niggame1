@@ -6,23 +6,25 @@ import { triplanarMaterial } from '../gfx/triplanar';
 import { Colliders } from './colliders';
 import { timber } from './geo';
 
-/** Barn half-sizes in metres: x across, z from the back wall to the exit door at +z. */
-export const BARN = { hx: 16, hz: 19 };
-export const FENCE = { minX: -32, maxX: 32, minZ: -30, maxZ: 50 };
+/** Hangar half-sizes in metres: x across (roofed long walls at ±x), z along (open-topped end walls). */
+export const BARN = { hx: 15, hz: 22 };
+/** The roll-up exit door in the +x wall: centre z and half width. */
+export const EXIT = { z: 2.75, halfW: 2.59 };
+export const FENCE = { minX: -30, maxX: 64, minZ: -36, maxZ: 36 };
 
-/** Outside the barn: meadow, swaying grass, fence, trees, round bales and distant hills. */
+/** Outside the hangar: meadow, swaying grass, fence, trees, round bales and distant hills. */
 export class Nature {
   readonly group = new THREE.Group();
   /** Grass patches, for the quality settings. */
   readonly grassPatches: THREE.InstancedMesh[] = [];
-  /** All grass; hidden while the barn door is shut (it is only seen through the cracks). */
+  /** All grass; hidden while the door is shut (the walls hide it). */
   readonly grassGroup: THREE.Group;
   private readonly time = { value: 0 };
 
   constructor(tex: Textures, colliders: Colliders, beamMat: THREE.Material, hayMat: THREE.Material) {
     const rnd = mulberry32(77);
     // Meadow.
-    // The meadow has a hole under the barn so it can never z-fight with the barn floor.
+    // The meadow has a hole under the hangar so it can never z-fight with its floor.
     const shape = new THREE.Shape([new THREE.Vector2(-450, -450), new THREE.Vector2(450, -450), new THREE.Vector2(450, 450), new THREE.Vector2(-450, 450)]);
     const X = BARN.hx - 0.1, Z = BARN.hz - 0.1;
     shape.holes.push(new THREE.Path([new THREE.Vector2(-X, -Z), new THREE.Vector2(-X, Z), new THREE.Vector2(X, Z), new THREE.Vector2(X, -Z)]));
@@ -33,13 +35,13 @@ export class Nature {
     meadow.receiveShadow = true;
     this.group.add(meadow);
     this.grassGroup = this.grass(rnd);
-    this.group.add(this.grassGroup, this.hills(), this.trees(rnd), this.fence(beamMat, colliders));
+    this.group.add(this.grassGroup, this.hills(), this.mountains(), this.trees(rnd), this.fence(beamMat, colliders));
     this.bales(hayMat, colliders);
   }
 
   update(dt: number): void { this.time.value += dt; }
 
-  /** Swaying grass clumps, densest by the barn door, split into patches so off-screen ones are culled. */
+  /** Swaying grass clumps, densest by the door, split into patches so off-screen ones are culled. */
   private grass(rnd: () => number): THREE.Group {
     // A clump of bent blades, darker at the root.
     const pos: number[] = [], col: number[] = [], nor: number[] = [], idx: number[] = [];
@@ -84,10 +86,10 @@ transformed.xz += vec2(0.7, 0.35) * sway * 0.05 * position.y * position.y * 16.0
     const greens = ['#5f8a2c', '#6e9a33', '#4f7a26', '#80a23c', '#93a046', '#6b8f30'].map((c) => new THREE.Color(c));
     let placed = 0;
     for (let n = 0; n < 90000 && placed < 14000; n++) {
-      const x = FENCE.minX - 6 + rnd() * (FENCE.maxX - FENCE.minX + 12), z = FENCE.minZ - 6 + rnd() * (FENCE.maxZ - FENCE.minZ + 22);
+      const x = FENCE.minX - 6 + rnd() * (FENCE.maxX - FENCE.minX + 22), z = FENCE.minZ - 6 + rnd() * (FENCE.maxZ - FENCE.minZ + 12);
       if (Math.abs(x) < BARN.hx + 0.5 && Math.abs(z) < BARN.hz + 0.5) continue;
-      if (Math.abs(x) < 3.6 && z > BARN.hz && z < BARN.hz + 5 && rnd() < 0.85) continue; // trodden path at the door
-      const d = Math.hypot(x, z - BARN.hz); // thinner further from the door
+      if (Math.abs(z - EXIT.z) < 3.6 && x > BARN.hx && x < BARN.hx + 5 && rnd() < 0.85) continue; // trodden path at the door
+      const d = Math.hypot(x - BARN.hx, z - EXIT.z); // thinner further from the door
       if (rnd() > 1.4 - d / 34) continue;
       q.setFromAxisAngle(up, rnd() * Math.PI * 2);
       const sc = 0.7 + rnd() * 0.6;
@@ -140,6 +142,36 @@ transformed.xz += vec2(0.7, 0.35) * sway * 0.05 * position.y * position.y * 16.0
     return new THREE.Mesh(g, new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 1 }));
   }
 
+  /** Pale jagged mountains far away, seen over the hangar walls like in the reference: flat, unlit, no fog. */
+  private mountains(): THREE.Mesh {
+    const N = new Noise(23);
+    const pos: number[] = [], col: number[] = [], idx: number[] = [];
+    const layers = [{ r: 450, h: [70, 150], c: '#dfe3e8', top: '#f4f6f8', f: 9 }, { r: 410, h: [45, 105], c: '#c9ced6', top: '#e6e9ee', f: 14 }];
+    for (const L of layers) {
+      const seg = 360, base = pos.length / 3, lo = new THREE.Color(L.c), hi = new THREE.Color(L.top);
+      for (let s = 0; s <= seg; s++) {
+        const a = (s / seg) * Math.PI * 2;
+        const n = N.fbm((s / seg) * L.f, L.r * 0.01, 4, L.f, 256) * 0.5 + 0.5;
+        const ridge = 1 - Math.abs(N.perlin((s / seg) * L.f * 3, 3.3, L.f * 3, 256)); // sharp peaks
+        const h = L.h[0] + (L.h[1] - L.h[0]) * Math.min(1, n * 0.7 + ridge * ridge * 0.5);
+        const x = Math.cos(a) * L.r, z = Math.sin(a) * L.r;
+        pos.push(x, -20, z, x, h, z);
+        col.push(lo.r * 0.86, lo.g * 0.86, lo.b * 0.88, hi.r, hi.g, hi.b);
+      }
+      for (let s = 0; s < seg; s++) {
+        const a = base + s * 2;
+        idx.push(a, a + 2, a + 1, a + 1, a + 2, a + 3);
+      }
+    }
+    const g = new THREE.BufferGeometry();
+    g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
+    g.setAttribute('color', new THREE.Float32BufferAttribute(col, 3));
+    g.setIndex(idx);
+    const m = new THREE.Mesh(g, new THREE.MeshBasicMaterial({ vertexColors: true, fog: false, side: THREE.DoubleSide }));
+    m.renderOrder = -5;
+    return m;
+  }
+
   private trees(rnd: () => number): THREE.Group {
     const trunks: THREE.BufferGeometry[] = [], crowns: THREE.BufferGeometry[] = [];
     const leaf = ['#3f6a26', '#4c7a2c', '#355d22', '#5a8530'].map((c) => new THREE.Color(c));
@@ -154,7 +186,7 @@ transformed.xz += vec2(0.7, 0.35) * sway * 0.05 * position.y * position.y * 16.0
     for (let guard = 0; placed < 46 && guard < 1000; guard++) {
       const a = rnd() * Math.PI * 2, r = 48 + Math.pow(rnd(), 0.7) * 100;
       const x = Math.cos(a) * r, z = Math.sin(a) * r;
-      if (Math.abs(x) < 20 && z > 0 && z < 90) continue; // keep the view from the door open
+      if (Math.abs(z - EXIT.z) < 20 && x > 0 && x < 90) continue; // keep the view from the door open
       const sc = 0.8 + rnd() * 0.7, th = 3.2 * sc;
       trunks.push(paint(new THREE.CylinderGeometry(0.16 * sc, 0.3 * sc, th, 7).translate(x, th / 2, z), trunkCol));
       const c = leaf[Math.floor(rnd() * leaf.length)];
@@ -203,7 +235,7 @@ transformed.xz += vec2(0.7, 0.35) * sway * 0.05 * position.y * position.y * 16.0
   private bales(hayMat: THREE.Material, colliders: Colliders): void {
     const geo = new THREE.CylinderGeometry(0.75, 0.75, 1.2, 28, 1);
     geo.rotateZ(Math.PI / 2);
-    const spots: Array<[number, number, number, number]> = [[21.2, 0.75, 25.6, 0.2], [22.9, 0.75, 24.4, -0.3], [22.1, 2.05, 25.0, 0.05], [-22, 0.75, 29.5, 1.2], [-24.5, 0.75, 12, 0.5]];
+    const spots: Array<[number, number, number, number]> = [[25.6, 0.75, 13.2, 1.7], [24.4, 0.75, 14.9, 1.3], [25.0, 2.05, 14.1, 1.6], [29.5, 0.75, -16, 2.6], [-21, 0.75, 27, 0.5]];
     for (const [x, y, z, r] of spots) {
       const m = new THREE.Mesh(geo, hayMat);
       m.position.set(x, y, z);

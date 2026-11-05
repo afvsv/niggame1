@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 
-/** Direction towards the sun. Comes in from the front-right so light pours through the barn door. */
-export const SUN_DIR = new THREE.Vector3(0.42, 0.72, 0.56).normalize();
+/** Direction towards the sun: over the far long wall, so the open middle and the exit wall get the light. */
+export const SUN_DIR = new THREE.Vector3(-0.5, 0.62, 0.6).normalize();
 
 const vert = /* glsl */ `
 varying vec3 vDir;
@@ -75,7 +75,7 @@ export function createSky(scene: THREE.Scene, renderer: THREE.WebGLRenderer): TH
   return sky;
 }
 
-/** Sun with a static shadow map over the barn and a hemisphere fill. The barn adds its own lamps. */
+/** Sun with a static shadow map over the hangar and a hemisphere fill. */
 export function createLights(scene: THREE.Scene, renderer: THREE.WebGLRenderer): THREE.DirectionalLight {
   renderer.shadowMap.enabled = true;
   renderer.shadowMap.type = THREE.PCFShadowMap;
@@ -86,13 +86,13 @@ export function createLights(scene: THREE.Scene, renderer: THREE.WebGLRenderer):
   sun.target.position.set(0, 2, 0);
   sun.castShadow = true;
   const sc = sun.shadow.camera;
-  sc.left = -27; sc.right = 27; sc.top = 27; sc.bottom = -27; sc.near = 5; sc.far = 100;
+  sc.left = -32; sc.right = 32; sc.top = 32; sc.bottom = -32; sc.near = 5; sc.far = 100;
   sun.shadow.mapSize.set(2048, 2048);
   sun.shadow.bias = -0.0004;
   sun.shadow.normalBias = 0.035;
   sun.shadow.radius = 2.5;
   scene.add(sun, sun.target);
-  scene.add(new THREE.HemisphereLight('#e6dcc8', '#7a5c38', 1.05));
-  scene.environmentIntensity = 0.28;
+  scene.add(new THREE.HemisphereLight('#e6dcc8', '#8a6c48', 1.25));
+  scene.environmentIntensity = 0.4;
   return sun;
 }

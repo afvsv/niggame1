@@ -126,8 +126,9 @@ export function genHay(S = 1024, seed = 11): PBRData {
   return finish(c, 2.2);
 }
 
-/** Packed barn floor: dirt, pebbles and trodden straw bits. One tile ≈ 3 m. */
-export function genDirt(S = 512, seed = 5): PBRData {
+/** Packed floor: dirt or sand, pebbles and trodden straw bits. One tile ≈ 3 m. */
+export function genDirt(S = 512, seed = 5, o: { light?: number; tint?: RGB; straws?: number } = {}): PBRData {
+  const L0 = o.light ?? 0.36, [tr, tg, tb] = o.tint ?? [1, 0.82, 0.62];
   const N = new Noise(seed);
   const c = canvas(S, [0, 0, 0], 0.92);
   for (let y = 0; y < S; y++)
@@ -138,8 +139,8 @@ export function genDirt(S = 512, seed = 5): PBRData {
       N.worley(u * 22, v * 22, 22, 22);
       const size = 0.12 + N.cell * 0.22;
       const peb = N.cell > 0.8 ? 1 - smooth(size * 0.6, size, N.F1) : 0;
-      const L = 0.36 + f * 0.1 + big * 0.08 + crumb * 0.03;
-      let r = L * 1.0, g = L * 0.82, b = L * 0.62;
+      const L = L0 + f * 0.1 + big * 0.08 + crumb * 0.03;
+      let r = L * tr, g = L * tg, b = L * tb;
       if (peb > 0) { const pl = 0.3 + N.cell * 0.12 + f * 0.1; r = lerp(r, pl, peb); g = lerp(g, pl * 0.9, peb); b = lerp(b, pl * 0.76, peb); }
       const wet = clamp(-big * 1.4, 0, 0.5);
       r *= 1 - wet * 0.35; g *= 1 - wet * 0.35; b *= 1 - wet * 0.3;
@@ -148,7 +149,7 @@ export function genDirt(S = 512, seed = 5): PBRData {
       c.R[i] = 0.93 - peb * 0.18 - wet * 0.25;
     }
   strands(c, mulberry32(seed + 1), {
-    count: Math.round(520 * (S / 512) ** 2), len: [10, 70, 1.6], rad: [1.0, 1.9], bend: 0.15,
+    count: Math.round((o.straws ?? 520) * (S / 512) ** 2), len: [10, 70, 1.6], rad: [1.0, 1.9], bend: 0.15,
     palette: HAY, lum: [0.6, 0.95], base: [0.3, 0.42], lift: 0.12, rough: [0.6, 0.8],
   });
   cavity(c, 3, 2, 0.6);
@@ -281,6 +282,80 @@ export function genBeam(S = 256, seed = 21): PBRData {
   return finish(c, 2.6);
 }
 
+/** Board-formed concrete: blue-grey, horizontal form lines, pores and damp stains. One tile ≈ 2 m. */
+export function genConcrete(S = 512, seed = 41): PBRData {
+  const N = new Noise(seed);
+  const c = canvas(S, [0, 0, 0], 0.9);
+  const rows = 8; // form boards per tile
+  for (let y = 0; y < S; y++)
+    for (let x = 0; x < S; x++) {
+      const i = y * S + x, u = x / S, v = y / S;
+      const f = N.fbm(u * 6, v * 6, 5, 6, 6), big = N.fbm(u * 2 + 3, v * 2 + 9, 3, 2, 2);
+      const row = Math.floor(v * rows), rv = v * rows - row;
+      const tone = 0.94 + 0.12 * (((row * 7919) % 13) / 13 - 0.5);
+      const grain = N.perlin(u * 60, v * 4 + row * 3.3, 60, 4) * 0.5 + N.perlin(u * 160, v * 160, 160, 160) * 0.3;
+      const line = 1 - smooth(0, 0.035, Math.min(rv, 1 - rv));
+      N.worley(u * 40, v * 40, 40, 40);
+      const pore = N.cell > 0.7 ? 1 - smooth(0.04, 0.12, N.F1) : 0;
+      const streak = clamp(N.fbm(u * 18, v * 2, 3, 18, 2) * 1.2, 0, 1) * smooth(0.2, 1, 1 - v);
+      let L = (0.4 + f * 0.08 + big * 0.06 + grain * 0.04) * tone;
+      L *= 1 - line * 0.35 - pore * 0.45 - streak * 0.18;
+      c.C[i * 3] = L * 0.9; c.C[i * 3 + 1] = L * 0.95; c.C[i * 3 + 2] = L * 1.06;
+      c.H[i] = 0.5 + f * 0.1 + grain * 0.06 - line * 0.25 - pore * 0.3;
+      c.R[i] = 0.88 + f * 0.06 - streak * 0.1;
+    }
+  return finish(c, 2.0);
+}
+
+/** Weathered corrugated steel sheet: ridges along v, grey with rust runs. One tile ≈ 1.2 m, 12 ridges. */
+export function genMetal(S = 512, seed = 51): PBRData {
+  const N = new Noise(seed);
+  const c = canvas(S, [0, 0, 0], 0.6);
+  const ridges = 12;
+  for (let y = 0; y < S; y++)
+    for (let x = 0; x < S; x++) {
+      const i = y * S + x, u = x / S, v = y / S;
+      const wave = 0.5 + 0.5 * Math.sin(u * ridges * Math.PI * 2);
+      const rust = clamp(N.fbm(u * 10, v * 1.6, 4, 10, 2) * 1.6 + N.fbm(u * 3 + 4, v * 3, 3, 3, 3) * 0.8, 0, 1);
+      const dirt = clamp(N.fbm(u * 5 + 9, v * 5, 4, 5, 5) * 0.8 + 0.3, 0, 1);
+      const spot = N.perlin(u * 90, v * 90, 90, 90);
+      const lit = 0.86 + wave * 0.14;
+      let r = lerp(0.42, 0.46, dirt), g = lerp(0.41, 0.4, dirt), b = lerp(0.4, 0.36, dirt);
+      r = lerp(r, 0.44, rust); g = lerp(g, 0.27, rust); b = lerp(b, 0.15, rust);
+      const k = lit * (0.92 + spot * 0.08);
+      c.C[i * 3] = r * k; c.C[i * 3 + 1] = g * k; c.C[i * 3 + 2] = b * k;
+      c.H[i] = wave * 0.8 + spot * 0.03 - rust * 0.05;
+      c.R[i] = 0.5 + rust * 0.4 + dirt * 0.08;
+    }
+  return finish(c, 5.0);
+}
+
+/** Roll-up door: painted teal steel slats with worn edges and grime at the bottom. One tile ≈ 1.2 m, 10 slats. */
+export function genShutter(S = 512, seed = 61): PBRData {
+  const N = new Noise(seed);
+  const c = canvas(S, [0, 0, 0], 0.55);
+  const slats = 10;
+  for (let y = 0; y < S; y++)
+    for (let x = 0; x < S; x++) {
+      const i = y * S + x, u = x / S, v = y / S;
+      const sv = v * slats - Math.floor(v * slats);
+      const profile = Math.sin(sv * Math.PI); // rounded slat
+      const groove = 1 - smooth(0, 0.08, Math.min(sv, 1 - sv));
+      const mid = 1 - smooth(0.02, 0.06, Math.abs(sv - 0.5)); // pressed rib in the middle
+      const wear = clamp(N.fbm(u * 14, v * 14, 4, 14, 14) * 1.5 - 0.35 + groove * 0.4, 0, 1);
+      const grime = clamp(N.fbm(u * 4 + 2, v * 4, 3, 4, 4) * 0.9 + 0.2, 0, 1);
+      const scratch = N.perlin(u * 200, v * 8, 200, 8) > 0.55 ? 1 : 0;
+      let r = 0.16, g = 0.3, b = 0.28;
+      r = lerp(r, 0.24, wear * 0.6); g = lerp(g, 0.24, wear * 0.6); b = lerp(b, 0.2, wear * 0.6);
+      if (scratch) { r = lerp(r, 0.4, 0.4); g = lerp(g, 0.42, 0.4); b = lerp(b, 0.4, 0.4); }
+      const k = (0.72 + profile * 0.28) * (1 - groove * 0.5) * (1 - grime * 0.25) * (1 - mid * 0.15);
+      c.C[i * 3] = r * k; c.C[i * 3 + 1] = g * k; c.C[i * 3 + 2] = b * k;
+      c.H[i] = profile * 0.6 - groove * 0.3 - mid * 0.12;
+      c.R[i] = 0.45 + wear * 0.35 + grime * 0.1;
+    }
+  return finish(c, 3.0);
+}
+
 /** Low-frequency RGB noise used to break up tiling. */
 export function genVariation(S = 256, seed = 9): Uint8Array {
   const N = new Noise(seed);
@@ -298,18 +373,24 @@ export function genVariation(S = 256, seed = 9): Uint8Array {
 
 export interface TextureJobs {
   hay: PBRData;
-  dirt: PBRData;
+  sand: PBRData; // hangar floor
   grass: PBRData;
-  planks: PBRData; // barn walls, with gaps
   boards: PBRData; // roof boards and furniture, no gaps
   beam: PBRData;
+  siding: PBRData; // hangar walls: dark vertical boards, no gaps
+  concrete: PBRData;
+  metal: PBRData; // corrugated roof sheets
+  shutter: PBRData; // the roll-up exit door
 }
 
 export const TEXTURE_JOBS: { [K in keyof TextureJobs]: () => TextureJobs[K] } = {
   hay: () => genHay(1024),
-  dirt: () => genDirt(512),
+  sand: () => genDirt(512, 15, { light: 0.58, tint: [1, 0.84, 0.63], straws: 70 }),
   grass: () => genGrass(512),
-  planks: () => genPlanks(512, { boards: 10, gaps: true, seed: 4, light: [0.6, 0.47, 0.33], dark: [0.4, 0.29, 0.19], weather: 0.55 }),
   boards: () => genPlanks(256, { boards: 5, gaps: false, seed: 8, light: [0.55, 0.4, 0.26], dark: [0.36, 0.25, 0.15], weather: 0.3 }),
   beam: () => genBeam(256),
+  siding: () => genPlanks(512, { boards: 8, gaps: false, seed: 31, light: [0.44, 0.31, 0.21], dark: [0.25, 0.17, 0.11], weather: 0.22 }),
+  concrete: () => genConcrete(512),
+  metal: () => genMetal(512),
+  shutter: () => genShutter(512),
 };

@@ -26,7 +26,7 @@ export function strawGeometry(): THREE.BufferGeometry {
 const COLORS = ['#e3c47a', '#d6b060', '#c09445', '#efdb9c', '#a98a46', '#b99b58'].map((c) => new THREE.Color(c));
 
 /**
- * Loose straws lying on the barn floor: a thick skirt around the stack base,
+ * Loose straws lying on the hangar floor: a thick skirt around the stack base,
  * a trail towards the counter and a light sprinkle everywhere else.
  */
 export function floorStraws(count: number, stackRadius: number, rnd: () => number, area: { hx: number; hz: number; counter: [number, number] }): THREE.InstancedMesh {

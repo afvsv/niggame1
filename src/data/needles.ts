@@ -1,5 +1,5 @@
 // The needles hidden in the stack. Each one found gives a small permanent bonus;
-// all of them unlock the barn door.
+// all of them unlock the hangar door.
 export type NeedleId = 'bent_pin' | 'sewing' | 'safety_pin' | 'desk_pin' | 'darning' | 'hat_pin';
 
 /** Bonuses as fractions added to 1 (0.25 = +25 %). */

@@ -14,7 +14,7 @@ const CHECK = svg('<path d="M3.5 8.5l3 3 6-7"/>');
 /** Whole-dollar prices drop the cents. */
 export const tagPrice = (v: number): string => (Number.isInteger(v) ? `$${v}` : fmtMoney(v));
 
-/** "Снабжение": the barn's supply board where tools and containers are bought. */
+/** "Снабжение": the hangar's supply stall where tools and containers are bought. */
 export class ShopScreen {
   private root = $('shop');
   private list = $('shop-list');
