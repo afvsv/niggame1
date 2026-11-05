@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
 import type { ItemId } from '../data/tools';
+import type { NeedleId } from '../data/needles';
 
 // Tool models built in code. Convention: the grip sits near the origin, the working end
 // points to -Z, +Y is up. Units are metres. Bare hands have no model: the player only
@@ -197,7 +198,9 @@ function bucket(): THREE.Group {
   const arc: number[][] = [];
   for (let i = 0; i <= 12; i++) { const a = (i / 12) * Math.PI; arc.push([Math.cos(a) * 0.138, 0.11 + Math.sin(a) * 0.12, Math.sin(a) * 0.03]); }
   g.add(tube(arc, 0.004, 'metalDark', 24, 5));
-  g.add(place(mesh(new THREE.CylinderGeometry(0.118, 0.118, 0.02, 24), 'strawMass'), 0, 0.075, 0));
+  const mass = place(mesh(new THREE.CylinderGeometry(0.118, 0.118, 0.02, 24), 'strawMass'), 0, 0.075, 0);
+  g.add(mass);
+  g.userData.mass = { mesh: mass, y0: -0.1, y1: 0.075, s0: 0.86, s1: 1 } satisfies Mass;
   return withLoad(g, 50, [0, 0.085, 0], [0.1, 0.05, 0.1], 14);
 }
 
@@ -212,6 +215,7 @@ function wheelbarrow(): THREE.Group {
   const mound = place(mesh(new THREE.SphereGeometry(0.3, 18, 10, 0, Math.PI * 2, 0, Math.PI / 2), 'strawMass'), 0, 0.5, 0.02);
   mound.scale.set(0.95, 0.35, 1.25);
   g.add(mound);
+  g.userData.mass = { mesh: mound, y0: 0.34, y1: 0.5, s0: 0.7, s1: 1 } satisfies Mass;
   // Wheel
   const wheel = new THREE.Group();
   wheel.add(mesh(new THREE.TorusGeometry(0.125, 0.038, 10, 28), 'rubber'));
@@ -226,6 +230,78 @@ function wheelbarrow(): THREE.Group {
   return withLoad(g, 70, [0, 0.58, 0.02], [0.2, 0.06, 0.3], 15);
 }
 
+// ---------- metal detector ----------
+function detector(): THREE.Group {
+  const g = new THREE.Group();
+  g.add(place(rod(0.011, 0.011, 0.86, 'metalDark'), 0, -0.01, -0.33));
+  g.add(place(rod(0.017, 0.017, 0.13, 'rubber'), 0, 0, 0.02)); // grip
+  g.add(place(mesh(new THREE.TorusGeometry(0.04, 0.008, 6, 16, Math.PI), 'rubber'), 0, 0.02, 0.17, 0, 0, 0)); // arm cuff
+  const box = place(new THREE.Mesh(new THREE.BoxGeometry(0.075, 0.05, 0.13), mats().yellow), 0, 0.04, -0.12);
+  const screen = place(new THREE.Mesh(new THREE.PlaneGeometry(0.05, 0.03), new THREE.MeshStandardMaterial({ color: '#1d2a22', roughness: 0.3, emissive: '#0d1a12' })), 0, 0.0655, -0.105, -Math.PI / 2);
+  const ledMat = new THREE.MeshStandardMaterial({ color: '#331111', emissive: '#ff3b2a', emissiveIntensity: 0.2, roughness: 0.4 });
+  const led = place(new THREE.Mesh(new THREE.SphereGeometry(0.008, 10, 8), ledMat), 0.022, 0.066, -0.16);
+  g.add(box, screen, led);
+  g.userData.led = ledMat;
+  // Bent lower shaft and the search coil.
+  g.add(place(rod(0.01, 0.01, 0.14, 'metalDark'), 0, -0.05, -0.8, -0.6, 0, 0));
+  const coil = new THREE.Group();
+  coil.add(mesh(new THREE.CylinderGeometry(0.11, 0.11, 0.016, 28), 'rubber'));
+  coil.add(place(mesh(new THREE.TorusGeometry(0.1, 0.012, 8, 28), 'yellow'), 0, 0.006, 0, Math.PI / 2));
+  coil.scale.set(1, 1, 1.25);
+  g.add(place(coil, 0, -0.105, -0.9, 0.12, 0, 0));
+  return g;
+}
+
+// ---------- needles (game-sized so they can be spotted in the hay) ----------
+let needleMat: THREE.MeshStandardMaterial | null = null;
+function shine(): THREE.MeshStandardMaterial {
+  return (needleMat ??= new THREE.MeshStandardMaterial({ color: '#e9eef2', metalness: 0.9, roughness: 0.18, emissive: '#4a4434', emissiveIntensity: 0.6 }));
+}
+const steel = (g: THREE.BufferGeometry) => new THREE.Mesh(g, shine());
+/** Needle lying along X, centred on the origin. */
+export function needleModel(id: NeedleId): THREE.Group {
+  const g = new THREE.Group();
+  const shaft = (len: number, r: number, x = 0) => { const m = steel(new THREE.CylinderGeometry(r * 0.25, r, len, 8)); m.rotation.z = Math.PI / 2; m.position.x = x; return m; };
+  const bead = (r: number, color: string) => new THREE.Mesh(new THREE.SphereGeometry(r, 14, 10), new THREE.MeshStandardMaterial({ color, roughness: 0.3, metalness: 0.1, emissive: color, emissiveIntensity: 0.15 }));
+  switch (id) {
+    case 'bent_pin': {
+      const t = tube([[-0.1, 0, 0], [0, 0, 0], [0.03, 0.012, 0.01], [0.09, 0.05, 0.02]], 0.0045, 'metal', 16, 6);
+      t.material = shine();
+      g.add(t, place(bead(0.012, '#c9ccd0'), -0.1, 0, 0));
+      break;
+    }
+    case 'sewing': {
+      g.add(shaft(0.22, 0.0045));
+      const eye = steel(new THREE.TorusGeometry(0.008, 0.002, 6, 12));
+      g.add(place(eye, -0.112, 0, 0, Math.PI / 2, 0, 0));
+      break;
+    }
+    case 'safety_pin': {
+      const t = tube([[0.1, 0, 0], [-0.08, 0, 0], [-0.1, 0.012, 0], [-0.08, 0.024, 0], [0.1, 0.024, 0]], 0.0035, 'metal', 24, 6);
+      t.material = shine();
+      g.add(t, place(new THREE.Mesh(new THREE.BoxGeometry(0.03, 0.03, 0.012), shine()), 0.105, 0.012, 0));
+      break;
+    }
+    case 'desk_pin': {
+      const head = new THREE.Mesh(new THREE.CylinderGeometry(0.035, 0.038, 0.014, 20), new THREE.MeshStandardMaterial({ color: '#c8382c', roughness: 0.35, emissive: '#c8382c', emissiveIntensity: 0.15 }));
+      head.rotation.z = Math.PI / 2;
+      g.add(head, shaft(0.05, 0.004, 0.03));
+      g.scale.setScalar(1.3);
+      break;
+    }
+    case 'darning': {
+      g.add(shaft(0.3, 0.006));
+      g.add(place(steel(new THREE.TorusGeometry(0.012, 0.003, 6, 14)), -0.152, 0, 0, Math.PI / 2, 0, 0));
+      break;
+    }
+    case 'hat_pin': {
+      g.add(shaft(0.3, 0.004, 0.02), place(bead(0.026, '#f2e6d8'), -0.135, 0, 0));
+      break;
+    }
+  }
+  return g;
+}
+
 export function buildModel(id: ItemId): THREE.Group {
   switch (id) {
     case 'hands': return handful();
@@ -234,10 +310,40 @@ export function buildModel(id: ItemId): THREE.Group {
     case 'pitchfork': return pitchfork();
     case 'bucket': return bucket();
     case 'wheelbarrow': return wheelbarrow();
+    case 'detector': return detector();
   }
 }
 
 export const loadOf = (g: THREE.Object3D): HayLoad | undefined => g.userData.load as HayLoad | undefined;
+
+/** The solid hay surface inside a container: rises and widens with the fill. */
+interface Mass { mesh: THREE.Object3D; y0: number; y1: number; s0: number; s1: number }
+
+/** Shows how full an item is: loose straws plus, for containers, the hay surface level. */
+export function setFill(g: THREE.Object3D, fill: number): void {
+  const f = Math.max(0, Math.min(1, fill));
+  const load = loadOf(g);
+  const mass = g.userData.mass as Mass | undefined;
+  if (mass) {
+    mass.mesh.visible = f > 0.01;
+    const y = mass.y0 + (mass.y1 - mass.y0) * f, s = mass.s0 + (mass.s1 - mass.s0) * f;
+    mass.mesh.position.y = y;
+    const base = (mass.mesh.userData.base ??= mass.mesh.scale.clone()) as THREE.Vector3;
+    mass.mesh.scale.set(base.x * s, base.y, base.z * s);
+    if (load) load.mesh.position.y = y + 0.01;
+    load?.set(f > 0.01 ? Math.min(1, 0.25 + f) : 0); // a few loose straws on top at any level
+    return;
+  }
+  load?.set(f);
+}
+
+/** The detector's LED: brighter and greener as the signal grows. */
+export function setLed(g: THREE.Object3D, strength: number, blink: number): void {
+  const m = g.userData.led as THREE.MeshStandardMaterial | undefined;
+  if (!m) return;
+  m.emissive.setRGB(1 - strength * 0.8, 0.25 + strength * 0.75, 0.15);
+  m.emissiveIntensity = 0.25 + blink * 2.5;
+}
 
 /** How each item is posed for its icon: model rotation, camera elevation and how full it looks. */
 export function iconPose(id: ItemId): { rot: THREE.Euler; elevation: number; fill: number } {
@@ -245,6 +351,7 @@ export function iconPose(id: ItemId): { rot: THREE.Euler; elevation: number; fil
     case 'hands': return { rot: new THREE.Euler(0, 0.6, 0), elevation: 0.6, fill: 1 };
     case 'bucket': return { rot: new THREE.Euler(0, 0, 0), elevation: 0.5, fill: 1 };
     case 'wheelbarrow': return { rot: new THREE.Euler(0, -2.3, 0), elevation: 0.55, fill: 1 };
+    case 'detector': return { rot: new THREE.Euler().setFromQuaternion(diagonalTool()), elevation: 0.3, fill: 0 };
     // Long tools: handle along the icon diagonal, working end up-right, blade facing the camera.
     default: return { rot: new THREE.Euler().setFromQuaternion(diagonalTool()), elevation: 0.15, fill: 0 };
   }
