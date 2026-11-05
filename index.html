@@ -13,10 +13,30 @@
       <div id="hud-top-right">
         <div id="hud-money">$0.00</div>
         <div id="hud-hay"></div>
+        <div id="hud-pops"></div>
       </div>
       <div id="hud-hint"></div>
-      <div id="hud-carry"></div>
-      <div id="hud-pops"></div>
+      <div id="hud-bottom">
+        <div id="hotbar-name"></div>
+        <div id="carry">
+          <div class="carry-label"><span id="carry-name"></span><span id="carry-num"></span></div>
+          <div class="carry-bar"><div id="carry-fill"></div></div>
+        </div>
+        <div id="hotbar"></div>
+      </div>
+    </div>
+    <div id="shop" class="screen hidden" role="dialog" aria-labelledby="shop-title">
+      <div class="panel">
+        <header>
+          <div>
+            <h2 id="shop-title"></h2>
+            <p id="shop-subtitle"></p>
+          </div>
+          <div class="wallet"><span id="shop-wallet-label"></span><b id="shop-money"></b></div>
+        </header>
+        <ul id="shop-list"></ul>
+        <footer><button id="shop-close" class="btn ghost" type="button"></button></footer>
+      </div>
     </div>
     <div id="overlay">
       <div class="overlay-card">
