@@ -6,14 +6,17 @@ import { triplanarMaterial } from '../gfx/triplanar';
 import { Colliders } from './colliders';
 import { timber } from './geo';
 
-export const BARN_HALF = 11;
-const FENCE = { minX: -24, maxX: 24, minZ: -22, maxZ: 36 };
+/** Barn half-sizes in metres: x across, z from the back wall to the exit door at +z. */
+export const BARN = { hx: 16, hz: 19 };
+export const FENCE = { minX: -32, maxX: 32, minZ: -30, maxZ: 50 };
 
 /** Outside the barn: meadow, swaying grass, fence, trees, round bales and distant hills. */
 export class Nature {
   readonly group = new THREE.Group();
   /** Grass patches, for the quality settings. */
   readonly grassPatches: THREE.InstancedMesh[] = [];
+  /** All grass; hidden while the barn door is shut (it is only seen through the cracks). */
+  readonly grassGroup: THREE.Group;
   private readonly time = { value: 0 };
 
   constructor(tex: Textures, colliders: Colliders, beamMat: THREE.Material, hayMat: THREE.Material) {
@@ -21,15 +24,16 @@ export class Nature {
     // Meadow.
     // The meadow has a hole under the barn so it can never z-fight with the barn floor.
     const shape = new THREE.Shape([new THREE.Vector2(-450, -450), new THREE.Vector2(450, -450), new THREE.Vector2(450, 450), new THREE.Vector2(-450, 450)]);
-    const H = BARN_HALF - 0.1;
-    shape.holes.push(new THREE.Path([new THREE.Vector2(-H, -H), new THREE.Vector2(-H, H), new THREE.Vector2(H, H), new THREE.Vector2(H, -H)]));
+    const X = BARN.hx - 0.1, Z = BARN.hz - 0.1;
+    shape.holes.push(new THREE.Path([new THREE.Vector2(-X, -Z), new THREE.Vector2(-X, Z), new THREE.Vector2(X, Z), new THREE.Vector2(X, -Z)]));
     const meadow = new THREE.Mesh(
       new THREE.ShapeGeometry(shape).rotateX(-Math.PI / 2),
       triplanarMaterial({ set: tex.grass, tile: 2.4, variation: tex.variation, variationTile: 23, brightness: 0.4, tint: '#d8c27a', tintAmount: 0.5, topOnly: true }),
     );
     meadow.receiveShadow = true;
     this.group.add(meadow);
-    this.group.add(this.grass(rnd), this.hills(), this.trees(rnd), this.fence(beamMat, colliders));
+    this.grassGroup = this.grass(rnd);
+    this.group.add(this.grassGroup, this.hills(), this.trees(rnd), this.fence(beamMat, colliders));
     this.bales(hayMat, colliders);
   }
 
@@ -79,12 +83,12 @@ transformed.xz += vec2(0.7, 0.35) * sway * 0.05 * position.y * position.y * 16.0
     const q = new THREE.Quaternion(), up = new THREE.Vector3(0, 1, 0), sv = new THREE.Vector3(), p = new THREE.Vector3();
     const greens = ['#5f8a2c', '#6e9a33', '#4f7a26', '#80a23c', '#93a046', '#6b8f30'].map((c) => new THREE.Color(c));
     let placed = 0;
-    for (let n = 0; n < 60000 && placed < 11000; n++) {
+    for (let n = 0; n < 90000 && placed < 14000; n++) {
       const x = FENCE.minX - 6 + rnd() * (FENCE.maxX - FENCE.minX + 12), z = FENCE.minZ - 6 + rnd() * (FENCE.maxZ - FENCE.minZ + 22);
-      if (Math.abs(x) < BARN_HALF + 0.5 && Math.abs(z) < BARN_HALF + 0.5) continue;
-      if (Math.abs(x) < 3.2 && z > BARN_HALF && z < BARN_HALF + 4 && rnd() < 0.85) continue; // trodden path at the door
-      const d = Math.hypot(x, z - BARN_HALF); // thinner further from the door
-      if (rnd() > 1.4 - d / 30) continue;
+      if (Math.abs(x) < BARN.hx + 0.5 && Math.abs(z) < BARN.hz + 0.5) continue;
+      if (Math.abs(x) < 3.6 && z > BARN.hz && z < BARN.hz + 5 && rnd() < 0.85) continue; // trodden path at the door
+      const d = Math.hypot(x, z - BARN.hz); // thinner further from the door
+      if (rnd() > 1.4 - d / 34) continue;
       q.setFromAxisAngle(up, rnd() * Math.PI * 2);
       const sc = 0.7 + rnd() * 0.6;
       sv.set(sc, sc * (0.7 + rnd() * 0.6), sc);
@@ -148,9 +152,9 @@ transformed.xz += vec2(0.7, 0.35) * sway * 0.05 * position.y * position.y * 16.0
     };
     let placed = 0;
     for (let guard = 0; placed < 46 && guard < 1000; guard++) {
-      const a = rnd() * Math.PI * 2, r = 34 + Math.pow(rnd(), 0.7) * 110;
+      const a = rnd() * Math.PI * 2, r = 48 + Math.pow(rnd(), 0.7) * 100;
       const x = Math.cos(a) * r, z = Math.sin(a) * r;
-      if (Math.abs(x) < 16 && z > 0 && z < 70) continue; // keep the view from the door open
+      if (Math.abs(x) < 20 && z > 0 && z < 90) continue; // keep the view from the door open
       const sc = 0.8 + rnd() * 0.7, th = 3.2 * sc;
       trunks.push(paint(new THREE.CylinderGeometry(0.16 * sc, 0.3 * sc, th, 7).translate(x, th / 2, z), trunkCol));
       const c = leaf[Math.floor(rnd() * leaf.length)];
@@ -199,7 +203,7 @@ transformed.xz += vec2(0.7, 0.35) * sway * 0.05 * position.y * position.y * 16.0
   private bales(hayMat: THREE.Material, colliders: Colliders): void {
     const geo = new THREE.CylinderGeometry(0.75, 0.75, 1.2, 28, 1);
     geo.rotateZ(Math.PI / 2);
-    const spots: Array<[number, number, number, number]> = [[14.2, 0.75, 13.6, 0.2], [15.9, 0.75, 12.4, -0.3], [15.1, 2.05, 13.0, 0.05], [-15, 0.75, 16.5, 1.2]];
+    const spots: Array<[number, number, number, number]> = [[21.2, 0.75, 25.6, 0.2], [22.9, 0.75, 24.4, -0.3], [22.1, 2.05, 25.0, 0.05], [-22, 0.75, 29.5, 1.2], [-24.5, 0.75, 12, 0.5]];
     for (const [x, y, z, r] of spots) {
       const m = new THREE.Mesh(geo, hayMat);
       m.position.set(x, y, z);
