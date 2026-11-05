@@ -8,7 +8,7 @@ import type { NeedleId } from '../data/needles';
 // sees the straws they hold (like the reference game).
 
 // ---------- materials ----------
-function woodTexture(base: string): THREE.CanvasTexture {
+export function woodTexture(base: string): THREE.CanvasTexture {
   const c = document.createElement('canvas');
   c.width = 128; c.height = 512;
   const ctx = c.getContext('2d')!;
@@ -30,7 +30,8 @@ function woodTexture(base: string): THREE.CanvasTexture {
 }
 
 let M: Record<string, THREE.Material> | null = null;
-function mats(): Record<string, THREE.Material> {
+/** Shared tool materials (also used by the upgrade icon models). */
+export function mats(): Record<string, THREE.Material> {
   if (M) return M;
   const std = (o: THREE.MeshStandardMaterialParameters) => new THREE.MeshStandardMaterial(o);
   M = {
