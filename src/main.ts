@@ -124,7 +124,7 @@ const clampTo = (v: number, h: number) => Math.max(-h + 0.5, Math.min(h - 0.5, v
 const world: World = {
   counter: shed.counter, shop: shed.shop, door: shed.door, board: shed.board, containers, needles, support,
   clamp: (x, z, from) => (shed.inside(from.x, from.z) ? [clampTo(x, BARN.hx), clampTo(z, BARN.hz)] : [x, z]),
-  exitZ: shed.exitZ,
+  exited: shed.exited,
 };
 
 const events: GameEvents = {
