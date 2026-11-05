@@ -1,4 +1,5 @@
 import { rich, t } from '../core/i18n';
+import type { BenchScore } from '../gfx/bench';
 import { GRAPHICS_CHOICES, Graphics, Lang, PRESETS, PRESET_NAMES, Preset, RANGES, Settings, defaultSettings, presetOf } from '../core/settings';
 
 const $ = (id: string) => document.getElementById(id)!;
@@ -27,10 +28,18 @@ export class SettingsScreen {
   isOpen = false;
   onChange: (s: Settings) => void = () => {};
   onClose: () => void = () => {};
+  /** "Performance test" button; the owner closes the screen, runs the test and reopens it. */
+  onBench: () => void = () => {};
+  /** Shown in the hint of the test row; the full run takes up to this long. */
+  benchSeconds = 15;
   /** Values fixed at start; changing them needs a reload. */
   private readonly boot: { antialias: boolean; lang: Lang };
 
-  constructor(private readonly s: Settings, private readonly recommended: Preset) {
+  /**
+   * @param recommended  preset for this computer: from the last performance test if there was one,
+   *                     otherwise a guess from the GPU name
+   */
+  constructor(private readonly s: Settings, private recommended: Preset, private bench: BenchScore[] | null = null) {
     this.boot = { antialias: s.graphics.antialias, lang: s.lang };
     $('settings-title').textContent = t('settings.title');
     $('settings-subtitle').textContent = t('settings.subtitle');
@@ -46,6 +55,7 @@ export class SettingsScreen {
     this.reloadBtn.addEventListener('click', () => location.reload());
     this.root.addEventListener('mousedown', (e) => { if (e.target === this.root) this.close(); });
     this.body.addEventListener('click', (e) => {
+      if ((e.target as HTMLElement).closest('button[data-bench]')) { this.onBench(); return; }
       const b = (e.target as HTMLElement).closest<HTMLButtonElement>('button[data-k]');
       if (b) this.pick(b.dataset.k!, b.dataset.v!);
     });
@@ -76,6 +86,12 @@ export class SettingsScreen {
     this.root.classList.remove('enter');
     document.body.classList.remove('in-settings');
     this.onClose();
+  }
+
+  /** Stores a finished test: its preset becomes the recommended one. */
+  setBench(scores: BenchScore[], preset: Preset): void {
+    this.bench = scores;
+    this.recommended = preset;
   }
 
   /** Re-render after an outside change (e.g. the F3 hotkey). */
@@ -123,7 +139,12 @@ export class SettingsScreen {
     const custom = preset === 'custom' ? `<span class="seg-custom">${esc(t('settings.custom'))}</span>` : '';
     this.body.innerHTML = [
       `<h3>${esc(t('settings.graphics'))}</h3>`,
-      this.row(esc(t('settings.preset')), this.seg('preset', presetOpts, preset, custom), t('settings.recommended', { p: t(`q.${this.recommended}`) })),
+      this.row(esc(t('settings.preset')), this.seg('preset', presetOpts, preset, custom), t(this.bench ? 'settings.recommendedTest' : 'settings.recommended', { p: t(`q.${this.recommended}`) })),
+      this.row(
+        esc(t('settings.bench')),
+        `<button type="button" class="btn ghost" data-bench>${esc(t(this.bench ? 'settings.benchAgain' : 'settings.benchRun'))}</button>`,
+        this.bench ? `${this.bench.map((b) => `${t(`q.${b.preset}`)} ${b.fps}`).join(' · ')} FPS` : t('settings.benchHint', { s: this.benchSeconds }),
+      ),
       this.gfxRow('resolution', t('settings.resolutionHint')),
       this.gfxRow('shadows'),
       this.gfxRow('grass'),
