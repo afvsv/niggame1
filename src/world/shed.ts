@@ -2,8 +2,9 @@ import * as THREE from 'three';
 import { Colliders } from './colliders';
 import { t } from '../core/i18n';
 import { SHOP_ITEMS } from '../data/tools';
+import { BALANCE } from '../data/balance';
 
-const FONT = '"Rubik Variable", system-ui, sans-serif';
+const FONT = '"Roboto Condensed Variable", "Arial Narrow", sans-serif';
 
 function noiseTexture(base: string, dots: string[], size = 256, count = 5000): THREE.CanvasTexture {
   const c = document.createElement('canvas');
@@ -44,22 +45,53 @@ function planksTexture(): THREE.CanvasTexture {
   return tex;
 }
 
+/** Dark weathered plank sign with light uppercase lettering. */
 function signTexture(text: string): THREE.CanvasTexture {
   const c = document.createElement('canvas');
   c.width = 512; c.height = 128;
   const ctx = c.getContext('2d')!;
-  ctx.fillStyle = '#2b2219';
+  ctx.fillStyle = '#2e241b';
   ctx.fillRect(0, 0, 512, 128);
-  ctx.strokeStyle = '#c9a24c';
-  ctx.lineWidth = 6;
-  ctx.strokeRect(6, 6, 500, 116);
-  ctx.fillStyle = '#f3e3b0';
-  ctx.font = `600 64px ${FONT}`;
+  for (let i = 0; i < 90; i++) {
+    ctx.fillStyle = `rgba(${Math.random() < 0.5 ? '0,0,0' : '255,235,200'},${Math.random() * 0.06})`;
+    ctx.fillRect(0, Math.random() * 128, 512, 1 + Math.random() * 2);
+  }
+  ctx.strokeStyle = 'rgba(239,233,218,.55)';
+  ctx.lineWidth = 3;
+  ctx.strokeRect(10, 10, 492, 108);
+  ctx.fillStyle = '#efe9da';
+  ctx.font = `700 64px ${FONT}`;
   ctx.textAlign = 'center';
   ctx.textBaseline = 'middle';
-  ctx.fillText(text, 256, 68);
+  ctx.fillText(text.toUpperCase(), 256, 68);
   const tex = new THREE.CanvasTexture(c);
   tex.colorSpace = THREE.SRGBColorSpace;
+  tex.anisotropy = 4;
+  return tex;
+}
+
+/** Chalk A-frame with the current price per strand. */
+function priceTexture(): THREE.CanvasTexture {
+  const W = 256, H = 384;
+  const c = document.createElement('canvas');
+  c.width = W; c.height = H;
+  const ctx = c.getContext('2d')!;
+  ctx.fillStyle = '#22272a';
+  ctx.fillRect(0, 0, W, H);
+  for (let i = 0; i < 500; i++) {
+    ctx.fillStyle = `rgba(236,230,211,${Math.random() * 0.05})`;
+    ctx.fillRect(Math.random() * W, Math.random() * H, 2 + Math.random() * 10, 1 + Math.random() * 2);
+  }
+  ctx.fillStyle = '#ece6d3';
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.font = `700 64px ${FONT}`;
+  ctx.fillText(`$${BALANCE.hay.pricePerStrand.toFixed(2)}`, W / 2, H / 2 - 30);
+  ctx.font = `700 30px ${FONT}`;
+  ctx.fillText(t('counter.price').toUpperCase(), W / 2, H / 2 + 30);
+  const tex = new THREE.CanvasTexture(c);
+  tex.colorSpace = THREE.SRGBColorSpace;
+  tex.anisotropy = 4;
   return tex;
 }
 
@@ -78,10 +110,10 @@ function boardTexture(): THREE.CanvasTexture {
     ctx.fillRect(28 + Math.random() * (W - 56), 28 + Math.random() * (H - 56), 2 + Math.random() * 14, 1 + Math.random() * 2);
   }
   ctx.fillStyle = '#ece6d3';
-  ctx.font = `600 96px ${FONT}`;
+  ctx.font = `700 96px ${FONT}`;
   ctx.textAlign = 'center';
   ctx.textBaseline = 'middle';
-  ctx.fillText(t('shop.sign'), W / 2, 130);
+  ctx.fillText(t('shop.sign').toUpperCase(), W / 2, 130);
   ctx.fillRect(W / 2 - 220, 196, 440, 4);
   SHOP_ITEMS.slice(0, 3).forEach((item, i) => {
     ctx.save();
@@ -96,7 +128,7 @@ function boardTexture(): THREE.CanvasTexture {
     let size = 30;
     do ctx.font = `500 ${size}px ${FONT}`; while (ctx.measureText(name).width > 236 && --size > 16);
     ctx.fillText(name, 0, -36);
-    ctx.font = `600 64px ${FONT}`;
+    ctx.font = `700 64px ${FONT}`;
     ctx.fillText(`$${item.price}`, 0, 34);
     ctx.fillStyle = '#b5523b';
     ctx.beginPath();
@@ -182,7 +214,7 @@ export function buildShed(scene: THREE.Scene, colliders: Colliders): Shed {
   body.position.y = 0.5;
   const top = new THREE.Mesh(new THREE.BoxGeometry(2.6, 0.08, 1.05), new THREE.MeshLambertMaterial({ color: '#a37a4c' }));
   top.position.y = 1.04;
-  const sign = new THREE.Mesh(new THREE.PlaneGeometry(1.6, 0.4), new THREE.MeshBasicMaterial({ map: signTexture(t('counter.sign')) }));
+  const sign = new THREE.Mesh(new THREE.PlaneGeometry(1.6, 0.4), new THREE.MeshLambertMaterial({ map: signTexture(t('counter.sign')) }));
   sign.position.set(0, 1.9, 0);
   sign.rotation.y = Math.PI; // readable from the stack side
   const postL = new THREE.Mesh(new THREE.BoxGeometry(0.08, 0.9, 0.08), beamMat);
@@ -191,6 +223,28 @@ export function buildShed(scene: THREE.Scene, colliders: Colliders): Shed {
   postR.position.x = 0.75;
   counter.add(body, top, sign, postL, postR);
   colliders.addBox({ minX: 4.5 - 1.3, maxX: 4.5 + 1.3, minY: 0, maxY: 1.08, minZ: 8.6 - 0.53, maxZ: 8.6 + 0.53 });
+
+  // Chalk A-frame with the price, between the stack and the counter.
+  const aframe = new THREE.Group();
+  aframe.position.set(2.7, 0, 7.7);
+  aframe.rotation.y = Math.PI - 0.35; // faces the stack, angled towards the middle
+  const chalk = new THREE.MeshLambertMaterial({ map: priceTexture() });
+  for (const side of [1, -1]) {
+    const leaf = new THREE.Group();
+    leaf.position.set(0, 0, side * 0.22);
+    leaf.rotation.x = -side * 0.24; // leaves meet at the top
+    const back = new THREE.Mesh(new THREE.BoxGeometry(0.62, 0.92, 0.025), counterWood);
+    back.position.y = 0.46;
+    leaf.add(back);
+    if (side === 1) {
+      const face = new THREE.Mesh(new THREE.PlaneGeometry(0.54, 0.82), chalk);
+      face.position.set(0, 0.47, 0.014);
+      leaf.add(face);
+    }
+    aframe.add(leaf);
+  }
+  group.add(aframe);
+  colliders.addBox({ minX: 2.7 - 0.38, maxX: 2.7 + 0.38, minY: 0, maxY: 0.95, minZ: 7.7 - 0.3, maxZ: 7.7 + 0.3 });
 
   // Supply board on the other side of the entrance, facing the stack.
   const shop = new THREE.Group();
