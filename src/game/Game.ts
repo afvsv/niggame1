@@ -46,7 +46,7 @@ export interface GameEvents {
   beep(strength: number): void;
 }
 
-/** The barn as the rules see it. */
+/** The hangar as the rules see it. */
 export interface World {
   counter: THREE.Object3D;
   shop: THREE.Object3D;
@@ -58,8 +58,8 @@ export interface World {
   support(x: number, z: number, maxY: number, r: number): number;
   /** Keeps a put-down container inside the room the player stands in. */
   clamp(x: number, z: number, from: THREE.Vector3): [number, number];
-  /** z beyond which the player is out of the barn. */
-  exitZ: number;
+  /** True once the player has walked out of the hangar. */
+  exited(x: number, z: number): boolean;
 }
 
 export interface Stats { earned: number; sold: number; time: number; containerSold: boolean }
@@ -260,7 +260,7 @@ export class Game {
       if (live) this.notice(t('hint.tired'));
     }
 
-    if (this.unlocked && !this.escaped && cam.z > this.world.exitZ) {
+    if (this.unlocked && !this.escaped && this.world.exited(cam.x, cam.z)) {
       this.escaped = true;
       this.ev.escaped();
     }
