@@ -8,6 +8,8 @@ export interface TutorialCtx {
   placedAny: boolean;
   fillAny: number;
   containerSold: boolean;
+  /** Upgrade levels bought. */
+  upgrades: number;
   found: number;
   unlocked: boolean;
   escaped: boolean;
@@ -17,6 +19,7 @@ export interface TutorialCtx {
 export const STEPS: ReadonlyArray<{ key: string; done(c: TutorialCtx): boolean }> = [
   { key: 'grab', done: (c) => c.carried > 0 || c.sold > 0 },
   { key: 'sell', done: (c) => c.sold > 0 },
+  { key: 'upgrade', done: (c) => c.upgrades > 0 },
   // Any purchase means the player already found the shop: do not insist on the toy shovel.
   { key: 'shovel', done: (c) => BOUGHT.some((id) => c.has(id)) },
   { key: 'bucket', done: (c) => c.has('bucket') },

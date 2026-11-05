@@ -24,6 +24,14 @@ export const BALANCE = {
     stepHeight: 0.45,
     mouseSensitivity: 0.0022,
   },
+  stamina: {
+    max: 100,
+    regen: 22, // per second, after a short pause
+    regenDelay: 0.7, // seconds without spending before it refills
+    sprintPerSec: 14,
+    recoverAt: 0.3, // out of breath until this share is back
+    tiredSlow: 1.8, // swing cooldown multiplier while out of breath
+  },
   reachM: 2.8, // tools and containers live in data/tools.ts, needles in data/needles.ts
   gravity: 18, // dropped containers and needles
   autosaveSeconds: 15,

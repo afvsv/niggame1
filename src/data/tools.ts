@@ -13,6 +13,7 @@ export interface ToolDef {
   capacity: number; // strands the tool (or hands) can hold
   cooldown: number; // seconds between clicks
   radiusCells: number; // reach around the aimed cell
+  stamina: number; // spent per swing
   requires?: ItemId;
 }
 
@@ -28,17 +29,18 @@ export interface DetectorDef {
   kind: 'detector';
   id: GadgetId;
   price: number;
-  rangeM: number; // through open air; hay muffles the signal
+  rangeM: number; // through open air
+  muffle: number; // each metre of hay counts as 1 + muffle metres
   requires?: ItemId;
 }
 
 export type ItemDef = ToolDef | ContainerDef | DetectorDef;
 
 export const TOOLS: readonly ToolDef[] = [
-  { kind: 'tool', id: 'hands', price: 0, grab: 2, capacity: 10, cooldown: 0.22, radiusCells: 1 },
-  { kind: 'tool', id: 'toy_shovel', price: 3, grab: 6, capacity: 24, cooldown: 0.3, radiusCells: 1 },
-  { kind: 'tool', id: 'spade', price: 30, grab: 18, capacity: 72, cooldown: 0.4, radiusCells: 1, requires: 'toy_shovel' },
-  { kind: 'tool', id: 'pitchfork', price: 140, grab: 40, capacity: 160, cooldown: 0.5, radiusCells: 2, requires: 'spade' },
+  { kind: 'tool', id: 'hands', price: 0, grab: 2, capacity: 10, cooldown: 0.22, radiusCells: 1, stamina: 1 },
+  { kind: 'tool', id: 'toy_shovel', price: 3, grab: 6, capacity: 24, cooldown: 0.3, radiusCells: 1, stamina: 1.5 },
+  { kind: 'tool', id: 'spade', price: 30, grab: 18, capacity: 72, cooldown: 0.4, radiusCells: 1, stamina: 2.5 },
+  { kind: 'tool', id: 'pitchfork', price: 140, grab: 40, capacity: 160, cooldown: 0.5, radiusCells: 2, stamina: 3.5, requires: 'spade' },
 ];
 
 export const CONTAINERS: readonly ContainerDef[] = [
@@ -46,7 +48,7 @@ export const CONTAINERS: readonly ContainerDef[] = [
   { kind: 'container', id: 'wheelbarrow', price: 90, capacity: 800, requires: 'bucket' },
 ];
 
-export const DETECTOR: DetectorDef = { kind: 'detector', id: 'detector', price: 60, rangeM: 6, requires: 'bucket' };
+export const DETECTOR: DetectorDef = { kind: 'detector', id: 'detector', price: 60, rangeM: 6, muffle: 0.6 };
 
 /** Hotbar order: tools, then containers, then gadgets. */
 export const ALL_ITEMS: readonly ItemDef[] = [...TOOLS, ...CONTAINERS, DETECTOR];

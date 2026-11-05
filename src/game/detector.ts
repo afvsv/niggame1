@@ -16,8 +16,8 @@ export function hayAlong(grid: HayGrid, a: THREE.Vector3, b: THREE.Vector3): num
 }
 
 /** 0..1: 1 right on top of the needle, 0 out of range. Hay muffles the signal. */
-export function signalStrength(dist: number, hayM: number, rangeM: number): number {
-  const eff = dist + hayM * 0.6;
+export function signalStrength(dist: number, hayM: number, rangeM: number, muffle = 0.6): number {
+  const eff = dist + hayM * muffle;
   return Math.max(0, Math.min(1, 1 - eff / rangeM));
 }
 

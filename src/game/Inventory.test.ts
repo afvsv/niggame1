@@ -11,13 +11,14 @@ describe('Inventory', () => {
 
   it('gates items behind requirements and money', () => {
     const inv = new Inventory();
-    expect(inv.buyState('spade', 1000)).toBe('locked');
+    expect(inv.buyState('pitchfork', 1000)).toBe('locked');
+    expect(inv.buyState('wheelbarrow', 1000)).toBe('locked');
     expect(inv.buyState('toy_shovel', 1)).toBe('poor');
     expect(inv.buyState('toy_shovel', 3)).toBe('ok');
     inv.add('toy_shovel');
     expect(inv.buyState('toy_shovel', 100)).toBe('owned');
-    expect(inv.buyState('spade', 100)).toBe('ok');
-    expect(inv.buyState('detector', 100)).toBe('locked');
+    inv.add('spade');
+    expect(inv.buyState('pitchfork', 1000)).toBe('ok');
   });
 
   it('puts bought items in hand and lists containers in the hotbar', () => {

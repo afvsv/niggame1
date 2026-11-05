@@ -1,6 +1,7 @@
 import type { InventorySave } from '../game/Inventory';
 import type { NeedleSave } from '../game/needles';
 import type { Stats } from '../game/Game';
+import type { Levels } from '../data/upgrades';
 import { HayGrid } from '../haystack/grid';
 
 const KEY = 'niggame.save.v1';
@@ -17,6 +18,7 @@ export interface SaveData {
   tutorial?: number;
   stats?: Stats;
   escaped?: boolean;
+  upgrades?: Levels; // added in 0.4
 }
 
 export function loadSave(): SaveData | null {
