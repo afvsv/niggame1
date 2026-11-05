@@ -24,11 +24,12 @@ import { HayGrid } from './haystack/grid';
 import { HaystackView } from './haystack/HaystackView';
 import { raycastGrid } from './haystack/raycast';
 import { PlayerController } from './player/PlayerController';
-import { renderIcons } from './tools/icons';
+import { renderIcons, renderUpgradeIcons } from './tools/icons';
 import { ViewModel } from './tools/ViewModel';
 import { Hotbar } from './ui/hotbar';
 import { Hud, WorldLabel } from './ui/hud';
 import { ShopScreen } from './ui/shop';
+import { TreeScreen } from './ui/tree';
 import { Colliders } from './world/colliders';
 import { buildShed } from './world/shed';
 import { createLights, createSky } from './world/sky';
@@ -108,6 +109,7 @@ const inv = new Inventory();
 inv.load(save?.inv);
 if (!gridOk) for (const st of inv.containers.values()) st.placed = null; // they stood by the old stack
 const icons = renderIcons(renderer, ALL_ITEMS.map((x) => x.id));
+const upIcons = renderUpgradeIcons(renderer);
 const hotbar = new Hotbar(icons);
 const vm = new ViewModel(inv.active, renderer);
 vm.setAspect(window.innerWidth / window.innerHeight);
@@ -142,6 +144,14 @@ const events: GameEvents = {
     hotbar.render(inv, capOf);
     hotbar.flash(id);
   },
+  upgrade: (_id, price) => {
+    audio.purchase();
+    hud.pop(`−${fmtMoney(price)}`, 'spend');
+    hud.bumpMoney();
+    hotbar.render(inv, capOf);
+    persist();
+  },
+  tired: () => hud.flashStamina(),
   toolChange: () => audio.tick(),
   openShop: () => openShop(),
   pour: (n) => { audio.pour(n); vm.swing(0.3); },
@@ -169,6 +179,9 @@ const events: GameEvents = {
 };
 const game = new Game(grid, camera, world, input, particles, inv, events);
 const capOf = (id: ItemId) => (isContainer(id) ? game.containerCapacity(id) : 0);
+// Upgrades change capacities, so they load before anything is clamped to them.
+game.up.load(save?.upgrades);
+game.refreshPerks();
 if (save) {
   game.money = save.money;
   game.carried = Math.min(save.carried, game.capacity);
@@ -189,7 +202,7 @@ hotbar.render(inv, capOf);
 // Overlay / pointer lock / screens
 const overlay = document.getElementById('overlay')!;
 overlayText.textContent = t('overlay.start');
-document.getElementById('overlay-controls')!.innerHTML = `<li class="story">${rich(t('overlay.story'))}</li>` + ['controls.move', 'controls.dig', 'controls.sell', 'controls.tools'].map((k) => `<li>${rich(t(k))}</li>`).join('');
+document.getElementById('overlay-controls')!.innerHTML = `<li class="story">${rich(t('overlay.story'))}</li>` + ['controls.move', 'controls.dig', 'controls.sell', 'controls.tools', 'controls.tree'].map((k) => `<li>${rich(t(k))}</li>`).join('');
 const resetBtn = document.getElementById('overlay-reset')!;
 resetBtn.textContent = t('overlay.reset');
 let saveDisabled = false;
@@ -238,7 +251,7 @@ overlay.addEventListener('click', () => { audio.unlock(); input.requestLock(); }
 const ending = new EndingScreen();
 ending.onStay = () => {
   input.requestLock();
-  setTimeout(() => { if (!input.locked && !shop.isOpen) showPause(); }, 400);
+  setTimeout(() => { if (!input.locked && !screenOpen()) showPause(); }, 400);
 };
 ending.onNewGame = () => {
   if (!confirm(t('ending.confirm'))) return;
@@ -248,23 +261,35 @@ ending.onNewGame = () => {
 };
 const shop = new ShopScreen(game, icons);
 shop.onBuyFail = () => audio.thud();
+const tree = new TreeScreen(game, icons, upIcons);
+tree.onBuyFail = () => audio.thud();
+const screenOpen = () => shop.isOpen || tree.isOpen || ending.isOpen;
 function openShop(): void {
-  if (shop.isOpen) return;
+  if (screenOpen()) return;
   audio.tick();
   shop.open();
   document.exitPointerLock();
 }
-shop.onClose = (relock) => {
+function openTree(): void {
+  if (screenOpen()) return;
   audio.tick();
+  tree.open();
+  document.exitPointerLock();
+}
+const onScreenClose = (relock: boolean) => {
+  audio.tick();
+  hotbar.render(inv, capOf);
   if (!relock) { showPause(); return; }
   input.requestLock();
   // The browser may refuse the lock (e.g. right after Esc); fall back to the pause card.
-  setTimeout(() => { if (!input.locked && !shop.isOpen) showPause(); }, 400);
+  setTimeout(() => { if (!input.locked && !screenOpen()) showPause(); }, 400);
 };
+shop.onClose = onScreenClose;
+tree.onClose = onScreenClose;
 input.onLockChange = (locked) => {
   if (locked) { overlay.classList.add('hidden'); return; }
   persist();
-  if (!shop.isOpen && !ending.isOpen) showPause();
+  if (!screenOpen()) showPause();
 };
 
 // Saving
@@ -274,6 +299,7 @@ function persist(): void {
     money: game.money, carried: game.carried, inv: inv.serialize(),
     player: { x: player.pos.x, y: player.pos.y, z: player.pos.z, yaw: player.yaw, pitch: player.pitch },
     needles: needles.saves, tutorial: tutorial.step, stats: game.stats, escaped: game.escaped,
+    upgrades: game.up.serialize(),
   }, grid);
 }
 setInterval(persist, BALANCE.autosaveSeconds * 1000);
@@ -334,9 +360,13 @@ function frame(now: number): void {
   const dt = Math.max(0, Math.min(0.05, (now - last) / 1000));
   last = now;
   if (!document.hidden && input.locked && settings.graphics.resolution === 'auto' && !params.has('fixedres')) adaptResolution(dt);
-  player.speedMul = 1 + game.perks.speed;
+  player.speedMul = game.d.speedMul;
+  player.jumpSpeed = game.d.jumpSpeed;
+  player.canSprint = !game.stamina.exhausted;
+  vm.steady = game.d.sway;
   player.update(dt, input);
-  game.update(dt);
+  game.update(dt, input.locked && player.sprinting);
+  if (input.locked && input.wasPressed('Tab')) openTree();
   vm.update(dt, { speed: Math.hypot(player.vel.x, player.vel.z), onGround: player.onGround, mouseDX: input.mouseDX, mouseDY: input.mouseDY });
   const load = game.load();
   vm.setLoad(load ? load[0] / load[1] : 0);
@@ -352,7 +382,7 @@ function frame(now: number): void {
   tutorial.update({
     carried: game.carried, sold: game.stats.sold, has: (id) => inv.has(id), placedAny: placed.length > 0,
     fillAny: Math.max(0, ...[...inv.containers.values()].map((c) => c.fill)), containerSold: game.stats.containerSold,
-    found: needles.found.length, unlocked: game.unlocked, escaped: game.escaped,
+    found: needles.found.length, unlocked: game.unlocked, escaped: game.escaped, upgrades: game.up.bought(),
   });
   hotbar.render(inv, capOf);
   hud.update({
@@ -367,6 +397,8 @@ function frame(now: number): void {
     unlocked: game.unlocked,
     step: tutorial.done ? null : { n: tutorial.step + 1, total: STEPS.length, text: t(`step.${tutorial.key}`, { n: needles.found.length, total: needles.total }) },
     signal: inv.active === 'detector' ? game.detector.strength : null,
+    stamina: { frac: game.stamina.frac, tired: game.stamina.exhausted },
+    treeNew: game.stats.sold > 0 && game.upgradesAffordable() > 0, // not during the first steps of the tutorial
   }, dt);
   const labels: WorldLabel[] = [];
   for (const { def, state } of placed) {
@@ -389,4 +421,4 @@ function frame(now: number): void {
 requestAnimationFrame(frame);
 
 // Debug handle for tests and the browser console.
-(window as unknown as { __game: unknown }).__game = { game, player, grid, renderer, camera, scene, persist, inv, shop, icons, vm, settings, settingsScreen, applySettings, sun, needles, containers, shed, tutorial, ending, hud };
+(window as unknown as { __game: unknown }).__game = { game, player, grid, renderer, camera, scene, persist, inv, shop, icons, vm, settings, settingsScreen, applySettings, sun, needles, containers, shed, tutorial, ending, hud, tree };

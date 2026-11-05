@@ -1,3 +1,5 @@
+import { enUp, ruUp } from './i18n.upgrades';
+
 type Dict = Record<string, string>;
 
 // Copy rules: sentence case, no exclamation marks, keys in square brackets render as keycaps.
@@ -313,7 +315,7 @@ const en: Dict = {
 
 };
 
-const dicts: Record<string, Dict> = { ru, en };
+const dicts: Record<string, Dict> = { ru: { ...ru, ...ruUp }, en: { ...en, ...enUp } };
 let lang = typeof navigator !== 'undefined' && navigator.language?.toLowerCase().startsWith('ru') ? 'ru' : 'en';
 
 export function setLang(l: 'ru' | 'en'): void { lang = l; }
