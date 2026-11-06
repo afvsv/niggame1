@@ -99,7 +99,7 @@ export function sellBooth(m: Mats): { kit: Kit; top: THREE.Vector3; belt: { poin
     kit.add(m.steel, new THREE.BoxGeometry(0.05, 0.3, 0.05).translate(cx + s * 0.26, 0.15, z));
     kit.add(m.steel, new THREE.BoxGeometry(0.16, 0.03, 0.16).translate(cx + s * 0.26, 0.015, z));
   }
-  const a = Math.atan2(p2.y - p1.y, p2.z - p1.z), zc = (p1.z + p2.z) / 2, yc = (p1.y + p2.y) / 2;
+  const a = Math.atan2(p1.y - p2.y, p1.z - p2.z), zc = (p1.z + p2.z) / 2, yc = (p1.y + p2.y) / 2; // sloping down from the sill
   kit.add(m.rubber, new THREE.BoxGeometry(0.5, 0.05, rampL).rotateX(a).translate(cx, yc, zc));
   for (const s of [-1, 1]) kit.add(m.steel, new THREE.BoxGeometry(0.05, 0.15, rampL + 0.12).rotateX(a).translate(cx + s * 0.28, yc + 0.02, zc));
   for (const [z, y] of [[p1.z, p1.y], [p2.z, p2.y]]) kit.add(m.steel, new THREE.CylinderGeometry(0.065, 0.065, 0.6, 12).rotateZ(Math.PI / 2).translate(cx, y - 0.02, z));
@@ -205,13 +205,16 @@ export function supplyStall(m: Mats): Kit {
     tag.position.set(x, 0.55, fz - 0.13);
     kit.group.add(tag);
   }
-  // Shelves along the back wall, stocked with jars, crates and cups.
+  // Shelves along the back wall on L-brackets, stocked with jars, crates and cups.
   const rnd = mulberry32(41);
   for (const y of [1.25, 1.8, 2.35]) {
-    kit.add(m.beam, timber(2.6, 0.05, 0.32, -1.5, y, bz + 0.22));
-    for (const sx of [-2.55, -1.7, -0.85, -0.15]) kit.add(m.beam, timber(0.05, 0.24, 0.05, sx, y - 0.14, bz + 0.22));
-    let x = -2.6;
-    while (x < -0.3) {
+    kit.add(m.beam, timber(2.2, 0.05, 0.34, -1.52, y, bz + 0.22));
+    for (const sx of [-2.5, -1.8, -1.1, -0.5]) {
+      // L-bracket: a shelf bar and an upright against the wall, both under the board.
+      kit.add(m.beam, timber(0.06, 0.05, 0.3, sx, y - 0.045, bz + 0.2), timber(0.06, 0.2, 0.06, sx, y - 0.15, bz + 0.09));
+    }
+    let x = -2.55;
+    while (x < -0.6) {
       const kind = rnd();
       if (kind < 0.45) {
         kit.add(m.black, new THREE.CylinderGeometry(0.09, 0.09, 0.26, 10).translate(x + 0.09, y + 0.15, bz + 0.22));
@@ -225,10 +228,10 @@ export function supplyStall(m: Mats): Kit {
       }
     }
   }
-  // Tools hanging on hooks right of the shelves.
+  // Tools hanging on hooks right of the shelves: working end up, flat against the wall.
   const hangTool = (id: 'spade' | 'pitchfork', x: number) => {
     const tool = buildModel(id);
-    tool.rotation.set(Math.PI / 2, 0, Math.PI, 'YXZ'); // working end up, against the wall
+    tool.rotation.set(Math.PI / 2, 0, 0, 'YXZ'); // head up, handle down, teeth flat on the wall
     tool.position.set(x, 1.95, bz + 0.16);
     tool.traverse((o) => { if (o instanceof THREE.Mesh) o.castShadow = true; });
     kit.group.add(tool);
@@ -236,39 +239,10 @@ export function supplyStall(m: Mats): Kit {
   };
   hangTool('spade', 0.85);
   hangTool('pitchfork', 1.15);
-  // Out front: the wheelbarrow display with its price post, and a tied sack of feed.
-  const barrow = buildModel('wheelbarrow');
-  barrow.position.set(0.1, 0, fz + 1.15);
-  barrow.rotation.y = 1.9;
-  barrow.traverse((o) => { if (o instanceof THREE.Mesh) o.castShadow = true; });
-  kit.group.add(barrow);
-  const post = new THREE.Group(); // price post by the wheelbarrow
-  const stick = new THREE.Mesh(new THREE.BoxGeometry(0.07, 1.15, 0.07), m.beam);
-  stick.position.y = 0.575;
-  const postTag = new THREE.Mesh(new THREE.PlaneGeometry(0.6, 0.3), new THREE.MeshStandardMaterial({ map: tagTexture(t('item.wheelbarrow'), `$${itemById('wheelbarrow').price}`), roughness: 0.9 }));
-  postTag.position.set(0, 1.02, 0.036);
-  post.add(stick, postTag);
-  post.position.set(1.35, 0, fz + 1.3);
-  post.rotation.y = -0.4;
-  post.traverse((o) => { if (o instanceof THREE.Mesh) o.castShadow = true; });
-  kit.group.add(post);
-  kit.solid(1.28, 1.42, 0, 1.2, fz + 1.22, fz + 1.38);
-  const sackProf = [[0, 0], [0.24, 0.01], [0.33, 0.14], [0.31, 0.3], [0.2, 0.42], [0.11, 0.5], [0.09, 0.58], [0.12, 0.62], [0.09, 0.66], [0.05, 0.66], [0, 0.65]]
-    .map(([x, y]) => new THREE.Vector2(x, y));
-  const sack = new THREE.Mesh(new THREE.LatheGeometry(sackProf, 16), m.burlap);
-  sack.position.set(1.65, 0, fz + 0.75);
-  sack.scale.set(1, 1, 0.82);
-  sack.castShadow = true;
-  const rope = new THREE.Mesh(new THREE.TorusGeometry(0.095, 0.014, 6, 18), m.beam);
-  rope.rotation.x = Math.PI / 2;
-  rope.position.set(1.65, 0.56, fz + 0.75);
-  kit.group.add(sack, rope);
-  kit.solid(1.35, 1.95, 0, 0.75, fz + 0.5, fz + 1.0);
   kit.solid(-W / 2, W / 2, 0, 3.2, -D / 2, -D / 2 + 0.12);
   kit.solid(1.1, 2.5, 0, 2.7, -D / 2, fz);
   kit.solid(-2.4, 1.1, 0, 0.96, fz - 0.72, fz - 0.1);
   kit.solid(-0.6, 0.8, 0, 0.7, fz + 0.6, fz + 1.75);
-  kit.solid(1.35, 1.95, 0, 0.8, fz + 0.5, fz + 1.0);
   hitPane(kit, 3.6, 2.0, -0.7, 1.9, fz - 0.1); // the open front over the counter
   return kit;
 }
