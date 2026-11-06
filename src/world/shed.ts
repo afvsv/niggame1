@@ -14,7 +14,9 @@ import { BARN, EXIT, Nature } from './nature';
 import { SUN_DIR } from './sky';
 import { timber } from './geo';
 import { Kit, prism, projectUV, tube, worldBox } from './kit';
-import { Mats, aFrame, bale, bollard, fernPot, hitPane, sellBooth, shadowed, storageShed, supplyStall, tripod } from './booths';
+import { Mats, aFrame, bale, bollard, fernPot, hitPane, sellBooth, shadowed, supplyStall, tripod } from './booths';
+import { ConveyorVisual } from './conveyorVisual';
+import { Delivery } from '../game/conveyor';
 import { hazardTexture, ledClock, needleBoard, plateTexture, priceTexture } from './signs';
 
 export interface Shed {
@@ -24,6 +26,8 @@ export interface Shed {
   door: THREE.Object3D; // the roll-up exit door and its lock
   board: THREE.Object3D; // the needle board by the exit
   counterTop: THREE.Vector3;
+  counterEnd: THREE.Vector3;
+  setConveyor(dt: number, deliveries: readonly Delivery[]): void;
   spawn: THREE.Vector3;
   spawnYaw: number;
   /** True once the player has walked out through the exit. */
@@ -124,14 +128,13 @@ export function buildShed(scene: THREE.Scene, colliders: Colliders, tex: Texture
     tim.push(timber(2 * IN, 0.24, 0.32, 0, END_H - 0.12, s * (HZ - 0.3))); // top rail
   }
 
-  // Timber frame: wall posts, inner posts under the roof edge, plates, girts, rafters and purlins.
+  // Timber frame: wall posts, plates, girts, rafters and purlins; the open floor has no obstructing posts.
   const pitch = Math.atan(SLOPE);
   for (const s of [-1, 1]) {
-    for (const z of FRAMES) { post(s * PX, z, WALL_H); post(s * IN, z, 7.42); }
+    for (const z of FRAMES) post(s * PX, z, WALL_H);
     tim.push(timber(0.3, 0.3, 2 * HZ - 0.3, s * PX, WALL_H - 0.15, 0)); // wall plate
     tim.push(timber(0.16, 0.22, 2 * HZ - 0.3, s * (HX - 0.15), 5.3, 0)); // girt
     tim.push(timber(0.3, 0.36, 2 * HZ - 0.3, s * IN, 7.6, 0)); // eave beam
-    for (const z of BAYS) for (const d of [-1, 1]) tim.push(timber(0.12, 1.5, 0.12, s * IN, 6.95, z + d * 0.5, 1.2, d * 0.75, 0, 0)); // knee braces
     const a0 = IN - 0.35, a1 = HX + 0.4, ac = (a0 + a1) / 2, len = (a1 - a0) / Math.cos(pitch);
     for (const z of FRAMES) tim.push(timber(len, 0.24, 0.14, s * ac, rafterY(ac), z, 1.2, 0, 0, s * pitch));
     for (const ax of [IN + 0.3, IN + 2.75, HX - 0.5]) tim.push(timber(0.12, 0.1, 2 * HZ + 0.4, s * ax, rafterY(ax) + 0.17, 0));
@@ -246,14 +249,14 @@ export function buildShed(scene: THREE.Scene, colliders: Colliders, tex: Texture
 
   // Along the exit wall: the selling kiosk in the far corner, the supply stall past the door.
   const sell = sellBooth(m);
-  const counter = sell.kit.place(group, box, 13.4, -18.0, -Math.PI / 2);
+  sell.kit.place(group, box, 13.4, -18.0, -Math.PI / 2);
+  const counter = sell.belt.place(group, box, 13.4, -18.0, -Math.PI / 2);
+  const conveyorVisual = new ConveyorVisual(counter, m.hay, m.steel);
   const counterTop = sell.top.clone().applyMatrix4(counter.matrixWorld);
+  const counterEnd = new THREE.Vector3(0.56, 0.7, 1.15).applyMatrix4(counter.matrixWorld);
   aFrame(m, priceTexture()).place(group, box, 10.9, -15.9, -Math.PI / 2 + 0.5);
   const shop = supplyStall(m).place(group, box, 13.25, 13.0, -Math.PI / 2);
   aFrame(m, null).place(group, box, 11.6, 9.4, -Math.PI / 2 + 0.3);
-  // Storage shed out in the yard.
-  storageShed(m).place(group, box, -4.2, -16.6, 0);
-  aFrame(m, null).place(group, box, -8.6, -14.6, 0.4);
 
   // Clutter: bollards, a tripod and a fern by the door, bales, crates and barrels along the walls.
   const rnd = mulberry32(19);
@@ -310,7 +313,7 @@ export function buildShed(scene: THREE.Scene, colliders: Colliders, tex: Texture
   hang('pitchfork', 1.8, 0.05); hang('spade', 2.7, -0.04); hang('spade', 3.4, 0.06);
 
   // Loose straws on the floor.
-  const strawCarpet = floorStraws(6500, BALANCE.stack.radiusM, mulberry32(5), { hx: HX, hz: HZ, counter: [counterTop.x, counterTop.z] });
+  const strawCarpet = floorStraws(3200, BALANCE.stack.radiusM, mulberry32(5), { hx: HX, hz: HZ, counter: [counterTop.x, counterTop.z] });
   group.add(strawCarpet);
 
   // Outside, and faint dust in the sunlight over the open middle.
@@ -353,7 +356,8 @@ export function buildShed(scene: THREE.Scene, colliders: Colliders, tex: Texture
   };
 
   return {
-    group, counter, shop, door, board, counterTop,
+    group, counter, shop, door, board, counterTop, counterEnd,
+    setConveyor: (dt, deliveries) => conveyorVisual.update(dt, deliveries),
     spawn: new THREE.Vector3(-2.0, 0, 18.6), spawnYaw: -0.35,
     exited: (x) => x > HX + 1.0,
     inside: (x, z) => Math.abs(x) < HX && Math.abs(z) < HZ,
