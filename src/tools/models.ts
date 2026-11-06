@@ -215,10 +215,12 @@ function wheelbarrow(): THREE.Group {
   tray.scale(0.7, 1, 1);
   g.add(place(mesh(tray, 'green'), 0, 0.46, 0.02));
   g.add(place(mesh(new THREE.PlaneGeometry(0.32, 0.44), 'green'), 0, 0.331, 0.02, -Math.PI / 2));
-  const mound = place(mesh(new THREE.SphereGeometry(0.3, 18, 10, 0, Math.PI * 2, 0, Math.PI / 2), 'strawMass'), 0, 0.5, 0.02);
-  mound.scale.set(0.95, 0.35, 1.25);
-  g.add(mound);
-  g.userData.mass = { mesh: mound, y0: 0.34, y1: 0.5, s0: 0.7, s1: 1 } satisfies Mass;
+  // One solid heap sitting inside the tray: a full sphere keeps the lower half hidden, so the
+  // hay never pokes through the open tray rim as floating blobs.
+  const heap = place(mesh(new THREE.SphereGeometry(0.3, 18, 12), 'strawMass'), 0, 0.42, 0.02);
+  heap.scale.set(0.88, 0.42, 1.15);
+  g.add(heap);
+  g.userData.mass = { mesh: heap, y0: 0.36, y1: 0.42, s0: 0.75, s1: 1 } satisfies Mass;
   // Wheel
   const wheel = new THREE.Group();
   wheel.add(mesh(new THREE.TorusGeometry(0.125, 0.038, 10, 28), 'rubber'));

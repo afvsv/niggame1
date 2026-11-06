@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { t } from '../core/i18n';
-import { buildModel } from '../tools/models';
+import { buildModel, setFill } from '../tools/models';
 import { mulberry32 } from '../gfx/noise';
 import { Kit, worldBox } from './kit';
 import { timber } from './geo';
@@ -113,17 +113,21 @@ export function supplyStall(m: Mats): Kit {
   kit.add(m.beam, timber(W, 0.12, 0.12, 0, 2.9, fz - 0.06));
   for (const x of [-1.2, 0.6]) kit.add(m.beam, timber(0.08, 0.85, 0.08, x, front + 0.38, fz + 0.1));
   signBoard(kit, m, t('shop.sign'), 2.5, 0.6, -0.3, front + 0.55, fz + 0.17);
-  // Counter with a few goods.
+  // Counter with a few goods: an empty pail, a coil of rope and a small stack of crates.
   kit.add(m.boards, worldBox(3.4, 0.9, 0.55, -0.66, 0.45, fz - 0.42));
   kit.add(m.beam, timber(3.5, 0.06, 0.64, -0.66, 0.93, fz - 0.42));
   const bucket = buildModel('bucket');
+  setFill(bucket, 0); // the display pail is empty: no hay dome inside
   bucket.position.set(-1.9, 0.96, fz - 0.42);
   bucket.rotation.y = 0.6;
-  const shovel = buildModel('toy_shovel');
-  shovel.position.set(0.2, 0.98, fz - 0.4);
-  shovel.rotation.set(Math.PI / 2, 0, 1.2, 'YXZ');
-  kit.group.add(bucket, shovel);
-  kit.add(m.boards, worldBox(0.42, 0.3, 0.32, -0.2, 1.11, fz - 0.45, 0.8));
+  kit.group.add(bucket);
+  const coil = new THREE.Group(); // rope, coiled up
+  for (const y of [0, 0.034, 0.068]) coil.add(new THREE.Mesh(new THREE.TorusGeometry(0.105 - y * 0.25, 0.016, 6, 26).rotateX(Math.PI / 2).translate(0, y, 0), m.burlap));
+  coil.position.set(0.3, 0.99, fz - 0.45);
+  coil.rotation.y = 0.5;
+  coil.traverse((o) => { if (o instanceof THREE.Mesh) o.castShadow = true; });
+  kit.group.add(coil);
+  kit.add(m.boards, worldBox(0.5, 0.26, 0.4, -0.75, 1.09, fz - 0.45, 0.35), worldBox(0.4, 0.22, 0.34, -0.7, 1.33, fz - 0.42, -0.18));
   // Price board on the back wall.
   kit.add(m.beam, timber(2.0, 1.28, 0.05, -0.75, 1.9, bz + 0.07));
   const face = new THREE.Mesh(new THREE.PlaneGeometry(1.9, 1.19), new THREE.MeshStandardMaterial({ map: boardTexture(), roughness: 0.9 }));
