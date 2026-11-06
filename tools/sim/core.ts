@@ -8,6 +8,10 @@ import { Upgrades } from '../../src/game/Upgrades';
 import { Derived, derive } from '../../src/game/stats';
 import { Stamina } from '../../src/game/stamina';
 
+// Automation branches are excluded: the sim does not model machine income, so buying those
+// nodes here would only distort the "everything bought" timeline. See autoIncome() in stage 2a.
+const SIM_BRANCHES = new Set(['lines', 'power', 'automation']);
+
 type XZ = readonly [number, number];
 
 /** Where the player walks, metres. Matches the hangar in src/world/shed.ts. */
@@ -168,6 +172,7 @@ function nextGoal(owned: Set<ItemId>, ups: Upgrades, perks: Perks, rate: number,
   }
   let cheapest: Goal | null = null;
   for (const u of UPGRADES) {
+    if (SIM_BRANCHES.has(u.branch)) continue; // automation income is not modelled here
     const price = ups.nextPrice(u.id);
     if (price === null || ups.missing(u.id, (i) => owned.has(i)).length) continue;
     const g: Goal = { kind: 'upgrade', id: u.id, price };

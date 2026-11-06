@@ -3,6 +3,8 @@ import { CONTAINERS, ContainerId, DETECTOR, TOOLS, ToolId } from '../data/tools'
 import type { Perks } from '../data/needles';
 import { Levels, Stat, statValue } from '../data/upgrades';
 
+const A = BALANCE.automation;
+
 export interface ToolStats { grab: number; cap: number; cooldown: number; stamina: number }
 
 /** Everything the rules read that upgrades and needles change. Pure: also used for "now → next" previews. */
@@ -28,6 +30,14 @@ export interface Derived {
   detectorMuffle: number;
   /** How deep into the stack the detector hears, metres. */
   detectorDeep: number;
+  /** Player-built belts: metres per second. */
+  beltSpeed: number;
+  /** Rake intake: strands per second, and the width of its head, metres. */
+  rakeRate: number;
+  rakeWidth: number;
+  /** Generator output in kW at full burn, and the firebox in strands. */
+  powerGen: number;
+  fuelCap: number;
 }
 
 const TOOL_STATS: Record<ToolId, { grab?: Stat; cap?: Stat; size?: Stat }> = {
@@ -76,5 +86,10 @@ export function derive(levels: Levels, perks: Perks): Derived {
     detectorRange,
     detectorMuffle,
     detectorDeep: detectorRange / (1 + detectorMuffle),
+    beltSpeed: A.beltSpeedMps * s('belt.speed'),
+    rakeRate: A.rakeStrandsPerSec * s('rake.rate'),
+    rakeWidth: A.rakeWidthM + s('rake.width'),
+    powerGen: A.generatorKw + s('power.out'),
+    fuelCap: A.fuelCap + s('fuel.cap'),
   };
 }

@@ -14,12 +14,16 @@ const I = (id: ItemId): Entry => ({ kind: 'item', id });
 const U = (id: UpgradeId): Entry => ({ kind: 'up', id });
 const G = (of: ItemId): Entry => ({ kind: 'group', of });
 
-/** Columns per branch. Column 0 holds the root (bare hands); every branch grows from it. */
+/** Columns per branch. Column 0 holds the root (bare hands); every branch grows from it.
+ *  Automation branches root at their plans node; cross-branch lines come from `requires`. */
 const LAYOUT: Record<BranchId, Entry[][]> = {
   hand: [[I('hands')], [U('hand_more'), I('toy_shovel'), I('spade'), I('bucket')], [G('toy_shovel'), G('spade'), I('pitchfork'), G('bucket'), I('wheelbarrow')], [G('pitchfork'), G('wheelbarrow')]],
   fitness: [[], [U('boots'), U('back'), U('breath'), U('reach')], [U('springs'), U('steady'), U('swing')]],
   selling: [[], [U('deal')]],
   needles: [[], [I('detector')], [G('detector'), U('precise')]],
+  lines: [[], [U('belt_plans')], [U('belt_speed')]],
+  automation: [[], [U('rake_plans')], [U('rake_rate'), U('rake_width')]],
+  power: [[], [U('power')], [U('gen_out'), U('firebox')]],
 };
 const COLS = 4;
 const W = 224, GAP = 48, CARD_H = 86, HEAD_H = 26, ROW_H = 30, VGAP = 8, PAD_X = 16, BAND_PAD = 14, BAND_GAP = 10, TOP = 10;
@@ -60,6 +64,14 @@ function valueText(id: UpgradeId, d: Derived): string {
     case 'deal': return t('up.deal.val', { v: perStrand(d.price) });
     case 'coil': return t('up.coil.val', { range: fmtNumber(Math.round(d.detectorRange * 10) / 10), deep: fmtNumber(Math.round(d.detectorDeep * 10) / 10) });
     case 'precise': return t('up.precise.val', { deep: fmtNumber(Math.round(d.detectorDeep * 10) / 10) });
+    case 'belt_plans': return t('up.belt_plans.val');
+    case 'belt_speed': return t('up.belt_speed.val', { v: fmtNumber(r2(d.beltSpeed)) });
+    case 'rake_plans': return t('up.rake_plans.val');
+    case 'rake_rate': return t('up.rake_rate.val', { v: fmtNumber(Math.round(d.rakeRate)) });
+    case 'rake_width': return t('up.rake_width.val', { v: fmtNumber(r2(d.rakeWidth)) });
+    case 'power': return t('up.power.val');
+    case 'gen_out': return t('up.gen_out.val', { v: fmtNumber(Math.round(d.powerGen * 10) / 10) });
+    case 'firebox': return t('up.firebox.val', { v: fmtNumber(Math.round(d.fuelCap)) });
   }
 }
 

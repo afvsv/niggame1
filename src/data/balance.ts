@@ -35,4 +35,32 @@ export const BALANCE = {
   reachM: 2.8, // tools and containers live in data/tools.ts, needles in data/needles.ts
   gravity: 18, // dropped containers and needles
   autosaveSeconds: 15,
+  automation: {
+    // Belts. Segments are placed from a free chain end to the aim point, snapped to the grid.
+    beltSpeedMps: 0.7, // base; × belt.speed upgrades
+    beltPricePerM: 8,
+    segmentMinM: 1,
+    segmentMaxM: 2.5,
+    joinTolM: 0.35, // a new segment may start at an existing free end within this distance
+    snapM: 0.5, // build grid
+    gapM: 0.9, // minimum space between wads on a belt
+    wadMaxStrands: 100, // a rake wad merges up to this, then a new wad starts
+    yardItemCap: 400, // wads across all belts; the final number is Ivan's call after ?bench
+    // Rake: pulls strands from the stack onto an adjacent belt start.
+    rakeStrandsPerSec: 12, // final value after the playtest (candidate 40–60)
+    rakeKw: 0.8,
+    rakePrice: 120,
+    rakeWidthM: 1.0, // base intake width; × rake.width upgrades (add)
+    rakeReachM: 2.2, // intake box depth towards the stack
+    rakePickM: 1.5, // a belt start within this of the output gets the wads
+    // Generator: burns hay fuel, powers machines within a radius.
+    generatorKw: 6,
+    generatorPrice: 150,
+    burnPerSec: 0.83, // at full 6 kW load; scales with the draw
+    fuelCap: 100, // strands in the firebox
+    powerRadiusM: 8,
+    // Building mode.
+    demolishHoldS: 0.5, // hold [X] to demolish; refund is 100%
+    refundPct: 1,
+  },
 } as const;
