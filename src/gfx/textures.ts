@@ -127,7 +127,7 @@ export function genHay(S = 1024, seed = 11): PBRData {
 }
 
 /** Packed floor: dirt or sand, pebbles and trodden straw bits. One tile ≈ 3 m. */
-export function genDirt(S = 512, seed = 5, o: { light?: number; tint?: RGB; straws?: number } = {}): PBRData {
+export function genDirt(S = 512, seed = 5, o: { light?: number; tint?: RGB; straws?: number; pebbles?: number } = {}): PBRData {
   const L0 = o.light ?? 0.36, [tr, tg, tb] = o.tint ?? [1, 0.82, 0.62];
   const N = new Noise(seed);
   const c = canvas(S, [0, 0, 0], 0.92);
@@ -138,7 +138,7 @@ export function genDirt(S = 512, seed = 5, o: { light?: number; tint?: RGB; stra
       const crumb = N.perlin(u * 96, v * 96, 96, 96);
       N.worley(u * 22, v * 22, 22, 22);
       const size = 0.12 + N.cell * 0.22;
-      const peb = N.cell > 0.8 ? 1 - smooth(size * 0.6, size, N.F1) : 0;
+      const peb = (N.cell > 0.8 ? 1 - smooth(size * 0.6, size, N.F1) : 0) * (o.pebbles ?? 1);
       const L = L0 + f * 0.1 + big * 0.08 + crumb * 0.03;
       let r = L * tr, g = L * tg, b = L * tb;
       if (peb > 0) { const pl = 0.3 + N.cell * 0.12 + f * 0.1; r = lerp(r, pl, peb); g = lerp(g, pl * 0.9, peb); b = lerp(b, pl * 0.76, peb); }
@@ -385,11 +385,11 @@ export interface TextureJobs {
 
 export const TEXTURE_JOBS: { [K in keyof TextureJobs]: () => TextureJobs[K] } = {
   hay: () => genHay(1024),
-  sand: () => genDirt(512, 15, { light: 0.58, tint: [1, 0.84, 0.63], straws: 70 }),
+  sand: () => genDirt(512, 15, { light: 0.58, tint: [1, 0.88, 0.73], straws: 4, pebbles: 0.25 }),
   grass: () => genGrass(512),
   boards: () => genPlanks(256, { boards: 5, gaps: false, seed: 8, light: [0.55, 0.4, 0.26], dark: [0.36, 0.25, 0.15], weather: 0.3 }),
   beam: () => genBeam(256),
-  siding: () => genPlanks(512, { boards: 8, gaps: false, seed: 31, light: [0.44, 0.31, 0.21], dark: [0.25, 0.17, 0.11], weather: 0.22 }),
+  siding: () => genPlanks(512, { boards: 8, gaps: false, seed: 31, light: [0.48, 0.43, 0.37], dark: [0.29, 0.25, 0.21], weather: 0.7 }),
   concrete: () => genConcrete(512),
   metal: () => genMetal(512),
   shutter: () => genShutter(512),
