@@ -42,6 +42,7 @@ export const BALANCE = {
     segmentMinM: 1,
     segmentMaxM: 2.5,
     joinTolM: 0.35, // a new segment may start at an existing free end within this distance
+    kioskJoinM: 2.5, // a belt ending this close to the kiosk belt hands its load over
     snapM: 0.5, // build grid
     gapM: 0.9, // minimum space between wads on a belt
     wadMaxStrands: 100, // a rake wad merges up to this, then a new wad starts

@@ -21,6 +21,7 @@ export interface SaveData {
   escaped?: boolean;
   upgrades?: Levels; // added in 0.4
   belt?: BeltCargo[]; // added in 0.5: hay still riding the kiosk conveyor
+  build?: import('../game/factory').BuildingSave[]; // added in 0.6: player-built machines
 }
 
 export function loadSave(): SaveData | null {
