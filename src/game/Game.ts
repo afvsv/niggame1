@@ -9,7 +9,6 @@ import { Input } from '../core/input';
 import { HayParticles } from '../fx/particles';
 import { HayGrid } from '../haystack/grid';
 import { GridHit, raycastGrid } from '../haystack/raycast';
-import { Conveyor } from './conveyor';
 import { CONTAINER_WORLD, ContainerProps } from './containers';
 import { DetectorSignal, hayAlong, signalStrength } from './detector';
 import { Inventory } from './Inventory';
@@ -30,7 +29,6 @@ export interface GameEvents {
   grab(got: number, tool: ToolDef): void;
   full(): void;
   sell(value: number, strandsSold: number): void;
-  loadBelt(strands: number): void;
   buy(id: ItemId): void;
   upgrade(id: UpgradeId, price: number): void;
   /** Ran out of stamina. */
@@ -82,7 +80,6 @@ export class Game {
   readonly stamina = new Stamina();
   stats: Stats = { earned: 0, sold: 0, time: 0, containerSold: false };
   readonly detector = new DetectorSignal();
-  readonly conveyor = new Conveyor();
   private cooldown = 0;
   private noticeT = 0;
   private readonly dir = new THREE.Vector3();
@@ -178,16 +175,7 @@ export class Game {
     this.stamina.update(dt, this.d.staminaMax, this.d.regen, sprinting);
     this.noticeT -= dt;
     const live = this.input.locked; // no interaction while paused or a screen is open
-    if (live) {
-      this.stats.time += dt;
-      this.conveyor.update(dt, (d) => {
-        this.money += d.value;
-        this.stats.earned += d.value;
-        this.stats.sold += d.n;
-        if (d.container) this.stats.containerSold = true;
-        this.ev.sell(d.value, d.n);
-      });
-    }
+    if (live) this.stats.time += dt;
     const target = (this.target = this.findTarget());
     if (live) {
       this.handleHotbar();
@@ -400,17 +388,20 @@ export class Game {
     return got;
   }
 
-  /** Loads the belt; payment occurs only when the load has fallen off its end. */
+  /** Sells what is in the hands plus a held container. */
   sell(): number {
     const held = this.inv.held;
     const inBox = held ? this.inv.state(held.id).fill : 0;
     const n = this.carried + inBox;
     if (n <= 0) return 0;
     const value = n * this.price;
+    this.money += value;
     this.carried = 0;
     if (held) this.inv.state(held.id).fill = 0;
-    this.conveyor.add(n, value, inBox > 0);
-    this.ev.loadBelt(n);
+    if (inBox > 0) this.stats.containerSold = true;
+    this.stats.earned += value;
+    this.stats.sold += n;
+    this.ev.sell(value, n);
     return value;
   }
 
