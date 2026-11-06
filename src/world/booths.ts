@@ -2,7 +2,7 @@ import * as THREE from 'three';
 import { t } from '../core/i18n';
 import { buildModel } from '../tools/models';
 import { mulberry32 } from '../gfx/noise';
-import { Kit, worldBox, tube } from './kit';
+import { Kit, worldBox } from './kit';
 import { timber } from './geo';
 import { boardTexture, priceTexture, signTexture } from './signs';
 
@@ -134,13 +134,23 @@ export function supplyStall(m: Mats): Kit {
     kit.add(m.beam, timber(0.62, 0.04, 0.34, -2.1, y, bz + 0.2));
     kit.add(m.boards, worldBox(0.22, 0.2, 0.22, -2.25, y + 0.12, bz + 0.2, 0.8), worldBox(0.18, 0.16, 0.2, -1.95, y + 0.1, bz + 0.22, 0.8));
   }
-  // Out front: a wheelbarrow and a sack.
+  // Out front: a wheelbarrow and a tied sack of feed.
   const barrow = buildModel('wheelbarrow');
   barrow.position.set(0.1, 0, fz + 1.15);
   barrow.rotation.y = 1.9;
   barrow.traverse((o) => { if (o instanceof THREE.Mesh) o.castShadow = true; });
   kit.group.add(barrow);
-  kit.add(m.burlap, new THREE.SphereGeometry(0.3, 14, 10).scale(1, 1.35, 0.85).translate(1.65, 0.38, fz + 0.75));
+  const sackProf = [[0, 0], [0.24, 0.01], [0.33, 0.14], [0.31, 0.3], [0.2, 0.42], [0.11, 0.5], [0.09, 0.58], [0.12, 0.62], [0.09, 0.66], [0.05, 0.66], [0, 0.65]]
+    .map(([x, y]) => new THREE.Vector2(x, y));
+  const sack = new THREE.Mesh(new THREE.LatheGeometry(sackProf, 16), m.burlap);
+  sack.position.set(1.65, 0, fz + 0.75);
+  sack.scale.set(1, 1, 0.82);
+  sack.castShadow = true;
+  const rope = new THREE.Mesh(new THREE.TorusGeometry(0.095, 0.014, 6, 18), m.beam);
+  rope.rotation.x = Math.PI / 2;
+  rope.position.set(1.65, 0.56, fz + 0.75);
+  kit.group.add(sack, rope);
+  kit.solid(1.35, 1.95, 0, 0.75, fz + 0.5, fz + 1.0);
   kit.solid(-W / 2, W / 2, 0, 3.2, -D / 2, -D / 2 + 0.12);
   kit.solid(1.1, 2.5, 0, 2.7, -D / 2, fz);
   kit.solid(-2.4, 1.1, 0, 0.96, fz - 0.72, fz - 0.1);
@@ -172,17 +182,6 @@ export function bollard(m: Mats, kit: Kit, x: number, z: number): void {
   for (const y of [0.62, 0.8]) kit.add(m.black, new THREE.CylinderGeometry(0.124, 0.124, 0.08, 16).translate(x, y, z));
   kit.add(m.yellow, new THREE.CylinderGeometry(0.2, 0.2, 0.03, 16).translate(x, 0.015, z));
   kit.solid(x - 0.15, x + 0.15, 0, 1.1, z - 0.15, z + 0.15);
-}
-
-/** Survey tripod. */
-export function tripod(m: Mats, kit: Kit, x: number, z: number): void {
-  const head = new THREE.Vector3(x, 1.45, z);
-  for (let i = 0; i < 3; i++) {
-    const a = (i / 3) * Math.PI * 2 + 0.4;
-    kit.add(m.iron, tube([head, new THREE.Vector3(x + Math.cos(a) * 0.5, 0, z + Math.sin(a) * 0.5)], 0.02, 2, 6));
-  }
-  kit.add(m.iron, new THREE.BoxGeometry(0.16, 0.08, 0.16).translate(x, 1.48, z), new THREE.CylinderGeometry(0.02, 0.02, 0.4, 6).translate(x, 1.7, z));
-  kit.solid(x - 0.35, x + 0.35, 0, 1.6, z - 0.35, z + 0.35);
 }
 
 /** Fern in a galvanised tub standing on a crate. */

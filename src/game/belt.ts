@@ -16,29 +16,30 @@ export interface BeltIO {
 /** Seconds from a dump at the low end to the drop through the window. */
 export const BELT_RIDE_SECONDS = 3.2;
 
-/** Wad size from the load: hands make a small clump, a wheelbarrow a proper heap. */
-const wadScale = (n: number): number => THREE.MathUtils.clamp(0.34 * Math.cbrt(n / 15), 0.3, 1.15);
+/** Pile width for a load of `n` strands: a handful makes a small clump, a wheelbarrow a heap. */
+export function pileWidth(n: number): number {
+  return THREE.MathUtils.clamp(0.16 * Math.cbrt(n / 15), 0.13, 0.5);
+}
 
 const FALL_SECONDS = 0.35;
 const FALL_SPEED = 3.2; // m/s after the tip over the sill
 
-/** Hay wads that ride up the conveyor, tip over the sill and fall into the booth. */
+/** Hay loads that ride up the conveyor, tip over the sill and fall into the booth. */
 export class Belt implements BeltIO {
   readonly group = new THREE.Group();
-  /** Set while a wad that casts a shadow moves. */
+  /** Set while something that casts a shadow moves. */
   moved = false;
   private readonly cargo: BeltCargo[] = [];
-  private readonly meshes = new Map<BeltCargo, THREE.Mesh>();
+  private readonly meshes = new Map<BeltCargo, THREE.Object3D>();
   private readonly falling = new Map<BeltCargo, { vy: number; age: number }>();
   private arrived = 0;
-  private readonly geo = new THREE.BoxGeometry(1, 0.55, 0.8);
   private readonly dir = new THREE.Vector3();
   private readonly pos = new THREE.Vector3();
 
   constructor(
     private readonly from: THREE.Vector3, // low end, where the player dumps
     private readonly to: THREE.Vector3, // the window sill
-    private readonly mat: THREE.Material,
+    private readonly makeWad: (n: number) => THREE.Object3D,
     private readonly onArrive?: (n: number) => void,
   ) {
     this.dir.copy(to).sub(from).normalize();
@@ -78,10 +79,10 @@ export class Belt implements BeltIO {
   update(dt: number): boolean {
     this.moved = false;
     for (const cargo of [...this.cargo]) {
-      cargo.t += (dt / BELT_RIDE_SECONDS); // constant belt speed along the path
+      cargo.t += dt / BELT_RIDE_SECONDS; // constant belt speed along the path
       const mesh = this.meshes.get(cargo)!;
       if (cargo.t >= 1) {
-        // Over the sill: tip forward and drop inside the booth. The mesh moves to the fall phase.
+        // Over the sill: tip forward and drop inside the booth. The wad moves to the fall phase.
         this.cargo.splice(this.cargo.indexOf(cargo), 1);
         this.falling.set(cargo, { vy: 0, age: 0 });
         this.pos.copy(this.to).addScaledVector(this.dir, 0.18);
@@ -112,27 +113,22 @@ export class Belt implements BeltIO {
   }
 
   private attach(cargo: BeltCargo): void {
-    const mesh = new THREE.Mesh(this.geo, this.mat);
-    mesh.castShadow = true;
-    mesh.receiveShadow = true;
-    const s = wadScale(cargo.n);
-    mesh.scale.set(s, s, s);
-    this.placeWad(mesh, cargo);
-    this.group.add(mesh);
-    this.meshes.set(cargo, mesh);
+    const wad = this.makeWad(cargo.n);
+    this.placeWad(wad, cargo);
+    this.group.add(wad);
+    this.meshes.set(cargo, wad);
   }
 
   private detach(cargo: BeltCargo): void {
-    const mesh = this.meshes.get(cargo);
-    if (mesh) this.group.remove(mesh);
+    const wad = this.meshes.get(cargo);
+    if (wad) this.group.remove(wad);
     this.meshes.delete(cargo);
   }
 
-  /** Rides slightly above the belt surface, with a gentle wobble in the first moments. */
-  private placeWad(mesh: THREE.Mesh, cargo: BeltCargo): void {
+  /** Rides on the belt surface, with a gentle wobble in the first moments. */
+  private placeWad(mesh: THREE.Object3D, cargo: BeltCargo): void {
     this.pos.lerpVectors(this.from, this.to, cargo.t);
-    const s = wadScale(cargo.n);
-    this.pos.y += 0.03 + 0.275 * s;
+    this.pos.y += 0.035;
     if (cargo.t < 0.15) this.pos.y += Math.sin(cargo.t * 40) * 0.012 * (1 - cargo.t / 0.15); // the dump thump
     mesh.position.copy(this.pos);
   }

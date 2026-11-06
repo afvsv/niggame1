@@ -302,6 +302,7 @@ export function needleModel(id: NeedleId): THREE.Group {
       break;
     }
   }
+  g.scale.setScalar(1.25); // game-sized needles are tiny; a bit bigger reads better in the hay
   return g;
 }
 

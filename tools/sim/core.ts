@@ -13,7 +13,7 @@ type XZ = readonly [number, number];
 /** Where the player walks, metres. Matches the hangar in src/world/shed.ts. */
 export const LAYOUT = {
   stand: BALANCE.stack.radiusM + 0.6, // distance from the stack centre while digging at its edge
-  counter: [10.9, -18.0] as XZ, // in front of the kiosk window
+  counter: [10.9, -8.3] as XZ, // in front of the kiosk window
   shop: [10.9, 12.6] as XZ, // in front of the supply stall
 };
 

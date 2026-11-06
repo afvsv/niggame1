@@ -60,7 +60,38 @@ export function priceTexture(): THREE.CanvasTexture {
   return tex;
 }
 
-/** Chalkboard with pinned paper price tags: the supply board. */
+/** Chalk A-frame with a few standing reminders for a new yard hand. */
+export function tipsTexture(): THREE.CanvasTexture {
+  const W = 256, H = 384;
+  const c = document.createElement('canvas');
+  c.width = W; c.height = H;
+  const ctx = c.getContext('2d')!;
+  ctx.fillStyle = '#22272a';
+  ctx.fillRect(0, 0, W, H);
+  for (let i = 0; i < 500; i++) {
+    ctx.fillStyle = `rgba(236,230,211,${Math.random() * 0.05})`;
+    ctx.fillRect(Math.random() * W, Math.random() * H, 2 + Math.random() * 10, 1 + Math.random() * 2);
+  }
+  ctx.fillStyle = '#ece6d3';
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.font = `700 34px ${FONT}`;
+  ctx.fillText(t('tips.title').toUpperCase(), W / 2, 44);
+  ctx.fillRect(W / 2 - 70, 72, 140, 3);
+  const lines = ['tips.line1', 'tips.line2', 'tips.line3'];
+  lines.forEach((key, i) => {
+    const text = t(key);
+    let size = 26;
+    do ctx.font = `500 ${size}px ${FONT}`; while (ctx.measureText(text).width > 216 && --size > 15);
+    ctx.fillText(text, W / 2, 130 + i * 84);
+  });
+  const tex = new THREE.CanvasTexture(c);
+  tex.colorSpace = THREE.SRGBColorSpace;
+  tex.anisotropy = 4;
+  return tex;
+}
+
+/** Chalkboard with pinned paper price tags: the whole shop assortment. */
 export function boardTexture(): THREE.CanvasTexture {
   const W = 1024, H = 640;
   const c = document.createElement('canvas');
@@ -75,30 +106,44 @@ export function boardTexture(): THREE.CanvasTexture {
     ctx.fillRect(28 + Math.random() * (W - 56), 28 + Math.random() * (H - 56), 2 + Math.random() * 14, 1 + Math.random() * 2);
   }
   ctx.fillStyle = '#ece6d3';
-  ctx.font = `700 96px ${FONT}`;
+  ctx.font = `700 84px ${FONT}`;
   ctx.textAlign = 'center';
   ctx.textBaseline = 'middle';
-  ctx.fillText(t('shop.sign').toUpperCase(), W / 2, 130);
-  ctx.fillRect(W / 2 - 220, 196, 440, 4);
-  SHOP_ITEMS.slice(0, 3).forEach((item, i) => {
+  ctx.fillText(t('shop.sign').toUpperCase(), W / 2, 104);
+  ctx.fillRect(W / 2 - 220, 158, 440, 4);
+  SHOP_ITEMS.forEach((item, i) => {
+    const col = i % 3, row = Math.floor(i / 3);
+    const locked = !!item.requires;
     ctx.save();
-    ctx.translate(200 + i * 312, 410);
-    ctx.rotate((i - 1) * 0.06 + (i === 1 ? 0.03 : -0.02));
+    ctx.translate(200 + col * 312, 320 + row * 218);
+    ctx.rotate((col - 1) * 0.05 + (row ? 0.02 : -0.03));
+    ctx.scale(0.82, 0.82);
     ctx.fillStyle = 'rgba(0,0,0,.25)';
     ctx.fillRect(-128, -84, 268, 180);
-    ctx.fillStyle = '#efe3c2';
+    ctx.fillStyle = locked ? '#d8c9a4' : '#efe3c2';
     ctx.fillRect(-134, -92, 268, 180);
     ctx.fillStyle = '#2b241b';
     const name = t(`item.${item.id}`);
     let size = 30;
     do ctx.font = `500 ${size}px ${FONT}`; while (ctx.measureText(name).width > 236 && --size > 16);
     ctx.fillText(name, 0, -36);
-    ctx.font = `700 64px ${FONT}`;
-    ctx.fillText(`$${item.price}`, 0, 34);
-    ctx.fillStyle = '#b5523b';
-    ctx.beginPath();
-    ctx.arc(0, -78, 9, 0, Math.PI * 2);
-    ctx.fill();
+    ctx.font = `700 58px ${FONT}`;
+    ctx.fillText(`$${item.price}`, 0, 30);
+    if (locked) {
+      // A small padlock instead of the red pin: the stall does not sell this one yet.
+      ctx.strokeStyle = '#4b4234';
+      ctx.lineWidth = 5;
+      ctx.beginPath();
+      ctx.arc(0, -72, 8, Math.PI, 0);
+      ctx.stroke();
+      ctx.fillStyle = '#4b4234';
+      ctx.fillRect(-12, -72, 24, 18);
+    } else {
+      ctx.fillStyle = '#b5523b';
+      ctx.beginPath();
+      ctx.arc(0, -78, 9, 0, Math.PI * 2);
+      ctx.fill();
+    }
     ctx.restore();
   });
   const tex = new THREE.CanvasTexture(c);
@@ -122,23 +167,24 @@ export function needleBoard(): { tex: THREE.CanvasTexture; draw(found: readonly 
     ctx.save();
     ctx.translate(x, y);
     ctx.rotate(-0.5);
-    ctx.strokeStyle = ok ? '#e8edf0' : 'rgba(236,230,211,.18)';
-    ctx.fillStyle = ok ? (id === 'desk_pin' ? '#c8382c' : id === 'hat_pin' ? '#f2e6d8' : '#e8edf0') : 'rgba(236,230,211,.18)';
+    const tone = ok ? '#e8edf0' : 'rgba(236,230,211,.32)';
+    ctx.strokeStyle = tone;
+    ctx.fillStyle = ok ? (id === 'desk_pin' ? '#c8382c' : id === 'hat_pin' ? '#f2e6d8' : '#e8edf0') : tone;
     ctx.lineCap = 'round';
-    ctx.lineWidth = id === 'darning' ? 7 : 5;
+    ctx.lineWidth = id === 'darning' ? 8 : 6;
     ctx.beginPath();
-    if (id === 'bent_pin') { ctx.moveTo(-60, 0); ctx.lineTo(20, 0); ctx.lineTo(60, -22); }
+    if (id === 'bent_pin') { ctx.moveTo(-52, 0); ctx.lineTo(20, 0); ctx.lineTo(58, -24); } // ball head, bent tip
     else if (id === 'safety_pin') { ctx.moveTo(60, -6); ctx.lineTo(-50, -6); ctx.arc(-50, 4, 10, -Math.PI / 2, Math.PI / 2, true); ctx.lineTo(60, 14); }
-    else if (id === 'desk_pin') { ctx.moveTo(0, 0); ctx.lineTo(40, 0); }
+    else if (id === 'desk_pin') { ctx.moveTo(-38, 0); ctx.lineTo(60, 0); } // flat head, short point
     else { ctx.moveTo(-70, 0); ctx.lineTo(70, 0); }
     ctx.stroke();
     ctx.beginPath();
     if (id === 'bent_pin') ctx.arc(-62, 0, 9, 0, Math.PI * 2);
-    else if (id === 'desk_pin') ctx.ellipse(-4, 0, 10, 30, 0, 0, Math.PI * 2);
+    else if (id === 'desk_pin') { ctx.ellipse(-48, 0, 9, 26, 0, 0, Math.PI * 2); ctx.fill(); }
     else if (id === 'hat_pin') ctx.arc(-72, 0, 16, 0, Math.PI * 2);
     else if (id === 'safety_pin') ctx.rect(56, -12, 18, 30);
-    if (id !== 'sewing' && id !== 'darning') ctx.fill();
-    else { ctx.lineWidth = 3; ctx.ellipse(-62, 0, 7, 3, 0, 0, Math.PI * 2); ctx.stroke(); }
+    if (id !== 'sewing' && id !== 'darning' && id !== 'desk_pin') ctx.fill();
+    if (id === 'sewing' || id === 'darning') { ctx.lineWidth = 3.5; ctx.ellipse(-60, 0, 8, 3.5, 0, 0, Math.PI * 2); ctx.stroke(); }
     ctx.restore();
   };
   const draw = (found: readonly NeedleId[]) => {

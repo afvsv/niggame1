@@ -14,9 +14,10 @@ import { BARN, EXIT, Nature } from './nature';
 import { SUN_DIR } from './sky';
 import { timber } from './geo';
 import { Kit, prism, projectUV, tube, worldBox } from './kit';
-import { Mats, aFrame, bale, bollard, fernPot, hitPane, sellBooth, shadowed, supplyStall, tripod } from './booths';
-import { hazardTexture, ledClock, needleBoard, plateTexture, priceTexture } from './signs';
+import { Mats, aFrame, bale, bollard, fernPot, hitPane, sellBooth, shadowed, supplyStall } from './booths';
+import { hazardTexture, ledClock, needleBoard, plateTexture, priceTexture, tipsTexture } from './signs';
 import { Belt } from '../game/belt';
+import { HayLoad } from '../tools/models';
 
 export interface Shed {
   group: THREE.Group;
@@ -251,27 +252,33 @@ export function buildShed(scene: THREE.Scene, colliders: Colliders, tex: Texture
   boardKit.solid(-1.25, 1.25, 0, 2.8, -0.42, 0.1);
   const board = boardKit.place(group, box, HX - 1.7, -1.7, -Math.PI / 2);
 
-  // Along the exit wall: the selling kiosk in the far corner, the supply stall past the door.
+  // Along the exit wall: the selling kiosk closer to the stack (the far corner made the walk too long),
+  // the supply stall past the door.
   const sell = sellBooth(m);
-  const counter = sell.kit.place(group, box, 13.4, -18.0, -Math.PI / 2);
+  const counter = sell.kit.place(group, box, 13.4, -8.3, -Math.PI / 2);
   const counterTop = sell.top.clone().applyMatrix4(counter.matrixWorld);
+  // The cargo on the belt is the same loose-straw pile the hands and tools show.
   const belt = new Belt(
     sell.belt.from.clone().applyMatrix4(counter.matrixWorld),
     sell.belt.to.clone().applyMatrix4(counter.matrixWorld),
-    m.hay,
+    (n) => {
+      const w = Math.cbrt(n / 15); // the pile grows with the load, like the handful does
+      const pile = new HayLoad(Math.round(Math.min(220, 60 * w)), [0.16 * w, 0.1 * w, 0.16 * w], { pile: true, len: [0.05, 0.13], seed: 101 + n });
+      pile.set(1);
+      pile.mesh.castShadow = true;
+      return pile.mesh;
+    },
   );
   group.add(belt.group);
-  aFrame(m, priceTexture()).place(group, box, 10.9, -15.9, -Math.PI / 2 + 0.5);
+  aFrame(m, priceTexture()).place(group, box, 10.9, -5.4, -Math.PI / 2 + 0.5);
   const shop = supplyStall(m).place(group, box, 13.25, 13.0, -Math.PI / 2);
-  aFrame(m, null).place(group, box, 11.6, 9.4, -Math.PI / 2 + 0.3);
-  aFrame(m, null).place(group, box, -8.6, -14.6, 0.4);
+  aFrame(m, tipsTexture()).place(group, box, 11.6, 9.4, -Math.PI / 2 + 0.3);
 
   // Clutter: bollards, a tripod and a fern by the door, bales, crates and barrels along the walls.
   const rnd = mulberry32(19);
   const props = new Kit();
   bollard(m, props, HX - 0.8, D0 - 0.6);
   bollard(m, props, HX - 0.8, D1 + 0.6);
-  tripod(m, props, 12.4, 7.4);
   fernPot(m, props, 14.1, 8.6, m.boards);
   const baleStack = (x0: number, z0: number, cols: number, rows: number, layers: number) => { // long side along z
     for (let l = 0; l < layers; l++) for (let i = 0; i < cols - l; i++) for (let j = 0; j < rows; j++) {
@@ -291,7 +298,7 @@ export function buildShed(scene: THREE.Scene, colliders: Colliders, tex: Texture
     if (y === 0) props.solid(x - s / 2, x + s / 2, 0, s, z - s / 2, z + s / 2);
   };
   crate(-14.0, 0, 12.3, 0.9, 0.1); crate(-13.95, 0.9, 12.35, 0.7, 0.4); crate(-14.05, 0, 13.4, 0.8, -0.2);
-  crate(14.0, 0, -6.4, 0.9, 0.3); crate(14.05, 0, -5.0, 0.7, -0.15);
+  crate(12.4, 0, 7.6, 0.9, 0.3); crate(12.5, 0, 8.9, 0.7, -0.15); // by the door, clear of the kiosk
   crate(-7.4, 0, HZ - 0.9, 0.9, 0.05); crate(-7.3, 0.9, HZ - 0.95, 0.75, -0.2);
   const barrelProf = [[0, 0], [0.3, 0], [0.34, 0.25], [0.36, 0.5], [0.34, 0.75], [0.3, 1.0], [0, 1.0]].map(([a, b]) => new THREE.Vector2(a, b));
   const barrel = (x: number, z: number) => {
