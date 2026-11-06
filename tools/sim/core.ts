@@ -6,7 +6,6 @@ import { UPGRADES, UpgradeId } from '../../src/data/upgrades';
 import type { Perks } from '../../src/data/needles';
 import { Upgrades } from '../../src/game/Upgrades';
 import { Derived, derive } from '../../src/game/stats';
-import { DELIVERY_TIME } from '../../src/game/conveyor';
 import { Stamina } from '../../src/game/stamina';
 
 type XZ = readonly [number, number];
@@ -14,7 +13,7 @@ type XZ = readonly [number, number];
 /** Where the player walks, metres. Matches the hangar in src/world/shed.ts. */
 export const LAYOUT = {
   stand: BALANCE.stack.radiusM + 0.6, // distance from the stack centre while digging at its edge
-  counter: [9.4, -17.44] as XZ, // at the low end of the conveyor
+  counter: [10.9, -18.0] as XZ, // in front of the kiosk window
   shop: [10.9, 12.6] as XZ, // in front of the supply stall
 };
 
@@ -43,7 +42,6 @@ class Player {
   money = 0;
   sold = 0;
   carried = 0;
-  pending: Array<{ at: number; n: number; value: number }> = [];
   readonly stamina: Stamina;
   d: Derived;
 
@@ -59,14 +57,7 @@ class Player {
       const dt = Math.min(DT, left);
       this.stamina.update(dt, this.d.staminaMax, this.d.regen, false);
       this.t += dt;
-      this.settle();
     }
-  }
-
-  private settle(): void {
-    const ready = this.pending.filter((d) => d.at <= this.t + 1e-9);
-    this.pending = this.pending.filter((d) => d.at > this.t + 1e-9);
-    for (const d of ready) { this.money += d.value; this.sold += d.n; }
   }
 
   /** Runs while there is breath to spare, walks otherwise. */
@@ -77,7 +68,6 @@ class Player {
       m -= (sprint ? P.sprintSpeed : P.walkSpeed) * this.d.speedMul * DT;
       this.stamina.update(DT, this.d.staminaMax, this.d.regen, sprint);
       this.t += DT;
-      this.settle();
     }
   }
 
@@ -94,7 +84,8 @@ class Player {
   }
 
   sell(n: number): void {
-    this.pending.push({ at: this.t + DELIVERY_TIME, n, value: n * this.d.price });
+    this.money += n * this.d.price;
+    this.sold += n;
     this.wait(ACT.sell);
   }
 
@@ -200,9 +191,6 @@ export function simulate({ minutes = 40, perks = NO_PERKS, script = TUTORIAL }: 
   while (p.t < minutes * 60 && goal) {
     p.trip(tool, p.bestBox(), true);
     let atShop = false;
-    // If this load funds the next purchase, wait for it to fall before spending.
-    if (p.money < goal.price && p.money + p.pending.reduce((v, d) => v + d.value, 0) >= goal.price && p.pending.length)
-      p.wait(Math.max(...p.pending.map((d) => d.at)) - p.t);
     while (goal && p.money + 1e-9 >= goal.price) {
       p.money -= goal.price;
       if (goal.kind === 'item') {
