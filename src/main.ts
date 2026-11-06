@@ -127,6 +127,7 @@ const support = (x: number, z: number, maxY: number, r: number) => supportHeight
 const clampTo = (v: number, h: number) => Math.max(-h + 0.5, Math.min(h - 0.5, v));
 const world: World = {
   counter: shed.counter, shop: shed.shop, door: shed.door, board: shed.board, containers, needles, support,
+  belt: shed.belt, counterTop: shed.counterTop,
   clamp: (x, z, from) => (shed.inside(from.x, from.z) ? [clampTo(x, BARN.hx), clampTo(z, BARN.hz)] : [x, z]),
   exited: shed.exited,
 };
@@ -134,6 +135,7 @@ const world: World = {
 const events: GameEvents = {
   grab: (got, tool) => { audio.rustle(0.5 + Math.min(1, got / 20)); vm.swing(tool.cooldown); },
   full: () => { audio.thud(); hud.shakeHeld(); },
+  dump: (n) => { audio.pour(n); vm.swing(0.3); },
   sell: (value, n) => {
     audio.sale(n / Math.max(1, game.capacity));
     hud.pop(`+${fmtMoney(value)}`, 'good');
@@ -191,6 +193,7 @@ if (save) {
   game.carried = Math.min(save.carried, game.capacity);
   if (save.stats) game.stats = { ...game.stats, ...save.stats };
   game.escaped = !!save.escaped && game.unlocked;
+  if (save.belt?.length) shed.belt.restore(save.belt); // hay that was still riding the conveyor
 }
 shed.setNeedles(needles.found);
 if (game.unlocked) shed.unlock(true);
@@ -305,7 +308,7 @@ function persist(): void {
     money: game.money, carried: game.carried, inv: inv.serialize(),
     player: { x: player.pos.x, y: player.pos.y, z: player.pos.z, yaw: player.yaw, pitch: player.pitch },
     needles: needles.saves, tutorial: tutorial.step, stats: game.stats, escaped: game.escaped,
-    upgrades: game.up.serialize(),
+    upgrades: game.up.serialize(), belt: shed.belt.riding(),
   }, grid);
 }
 setInterval(persist, BALANCE.autosaveSeconds * 1000);

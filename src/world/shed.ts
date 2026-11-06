@@ -14,8 +14,9 @@ import { BARN, EXIT, Nature } from './nature';
 import { SUN_DIR } from './sky';
 import { timber } from './geo';
 import { Kit, prism, projectUV, tube, worldBox } from './kit';
-import { Mats, aFrame, bale, bollard, fernPot, hitPane, sellBooth, shadowed, storageShed, supplyStall, tripod } from './booths';
+import { Mats, aFrame, bale, bollard, fernPot, hitPane, sellBooth, shadowed, supplyStall, tripod } from './booths';
 import { hazardTexture, ledClock, needleBoard, plateTexture, priceTexture } from './signs';
+import { Belt } from '../game/belt';
 
 export interface Shed {
   group: THREE.Group;
@@ -24,6 +25,7 @@ export interface Shed {
   door: THREE.Object3D; // the roll-up exit door and its lock
   board: THREE.Object3D; // the needle board by the exit
   counterTop: THREE.Vector3;
+  belt: Belt; // the kiosk conveyor: dumps ride up and pay on delivery
   spawn: THREE.Vector3;
   spawnYaw: number;
   /** True once the player has walked out through the exit. */
@@ -53,6 +55,8 @@ const rafterY = (ax: number) => 7.9 + (ax - IN) * SLOPE; // rafter centre line a
 const BAYS = [-16.5, -11, -5.5, 0, 5.5, 11, 16.5];
 const FRAMES = [-(HZ - 0.3), ...BAYS, HZ - 0.3];
 const PX = HX - 0.3; // wall posts
+// The inner post by the kiosk corner stood in front of the conveyor; the approach stays clear without it.
+const NO_POST = new Set(['1,-16.5']);
 const DOOR_H = 5;
 const D0 = EXIT.z - EXIT.halfW, D1 = EXIT.z + EXIT.halfW, DW = D1 - D0;
 
@@ -127,11 +131,14 @@ export function buildShed(scene: THREE.Scene, colliders: Colliders, tex: Texture
   // Timber frame: wall posts, inner posts under the roof edge, plates, girts, rafters and purlins.
   const pitch = Math.atan(SLOPE);
   for (const s of [-1, 1]) {
-    for (const z of FRAMES) { post(s * PX, z, WALL_H); post(s * IN, z, 7.42); }
+    for (const z of FRAMES) {
+      post(s * PX, z, WALL_H);
+      if (!NO_POST.has(`${s},${z}`)) post(s * IN, z, 7.42);
+    }
     tim.push(timber(0.3, 0.3, 2 * HZ - 0.3, s * PX, WALL_H - 0.15, 0)); // wall plate
     tim.push(timber(0.16, 0.22, 2 * HZ - 0.3, s * (HX - 0.15), 5.3, 0)); // girt
     tim.push(timber(0.3, 0.36, 2 * HZ - 0.3, s * IN, 7.6, 0)); // eave beam
-    for (const z of BAYS) for (const d of [-1, 1]) tim.push(timber(0.12, 1.5, 0.12, s * IN, 6.95, z + d * 0.5, 1.2, d * 0.75, 0, 0)); // knee braces
+    for (const z of BAYS) for (const d of [-1, 1]) if (!NO_POST.has(`${s},${z}`)) tim.push(timber(0.12, 1.5, 0.12, s * IN, 6.95, z + d * 0.5, 1.2, d * 0.75, 0, 0)); // knee braces
     const a0 = IN - 0.35, a1 = HX + 0.4, ac = (a0 + a1) / 2, len = (a1 - a0) / Math.cos(pitch);
     for (const z of FRAMES) tim.push(timber(len, 0.24, 0.14, s * ac, rafterY(ac), z, 1.2, 0, 0, s * pitch));
     for (const ax of [IN + 0.3, IN + 2.75, HX - 0.5]) tim.push(timber(0.12, 0.1, 2 * HZ + 0.4, s * ax, rafterY(ax) + 0.17, 0));
@@ -248,11 +255,15 @@ export function buildShed(scene: THREE.Scene, colliders: Colliders, tex: Texture
   const sell = sellBooth(m);
   const counter = sell.kit.place(group, box, 13.4, -18.0, -Math.PI / 2);
   const counterTop = sell.top.clone().applyMatrix4(counter.matrixWorld);
+  const belt = new Belt(
+    sell.belt.from.clone().applyMatrix4(counter.matrixWorld),
+    sell.belt.to.clone().applyMatrix4(counter.matrixWorld),
+    m.hay,
+  );
+  group.add(belt.group);
   aFrame(m, priceTexture()).place(group, box, 10.9, -15.9, -Math.PI / 2 + 0.5);
   const shop = supplyStall(m).place(group, box, 13.25, 13.0, -Math.PI / 2);
   aFrame(m, null).place(group, box, 11.6, 9.4, -Math.PI / 2 + 0.3);
-  // Storage shed out in the yard.
-  storageShed(m).place(group, box, -4.2, -16.6, 0);
   aFrame(m, null).place(group, box, -8.6, -14.6, 0.4);
 
   // Clutter: bollards, a tripod and a fern by the door, bales, crates and barrels along the walls.
@@ -353,13 +364,17 @@ export function buildShed(scene: THREE.Scene, colliders: Colliders, tex: Texture
   };
 
   return {
-    group, counter, shop, door, board, counterTop,
+    group, counter, shop, door, board, counterTop, belt,
     spawn: new THREE.Vector3(-2.0, 0, 18.6), spawnYaw: -0.35,
     exited: (x) => x > HX + 1.0,
     inside: (x, z) => Math.abs(x) < HX && Math.abs(z) < HZ,
     setNeedles: (found) => boardTex.draw(found),
     unlock,
-    update: (dt) => { nature.update(dt); tickClock(dt); if (beams.group.visible) beams.update(dt); return animate(dt); },
+    update: (dt) => {
+      nature.update(dt); tickClock(dt);
+      if (beams.group.visible) beams.update(dt);
+      return animate(dt) || belt.update(dt);
+    },
     quality: { grass: nature.grassPatches, floorStraws: strawCarpet, beams: beams.group },
   };
 }

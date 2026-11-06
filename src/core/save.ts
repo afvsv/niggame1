@@ -2,6 +2,7 @@ import type { InventorySave } from '../game/Inventory';
 import type { NeedleSave } from '../game/needles';
 import type { Stats } from '../game/Game';
 import type { Levels } from '../data/upgrades';
+import type { BeltCargo } from '../game/belt';
 import { HayGrid } from '../haystack/grid';
 
 const KEY = 'niggame.save.v1';
@@ -19,6 +20,7 @@ export interface SaveData {
   stats?: Stats;
   escaped?: boolean;
   upgrades?: Levels; // added in 0.4
+  belt?: BeltCargo[]; // added in 0.5: hay still riding the kiosk conveyor
 }
 
 export function loadSave(): SaveData | null {

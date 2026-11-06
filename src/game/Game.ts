@@ -9,6 +9,7 @@ import { Input } from '../core/input';
 import { HayParticles } from '../fx/particles';
 import { HayGrid } from '../haystack/grid';
 import { GridHit, raycastGrid } from '../haystack/raycast';
+import type { BeltIO } from './belt';
 import { CONTAINER_WORLD, ContainerProps } from './containers';
 import { DetectorSignal, hayAlong, signalStrength } from './detector';
 import { Inventory } from './Inventory';
@@ -29,6 +30,8 @@ export interface GameEvents {
   grab(got: number, tool: ToolDef): void;
   full(): void;
   sell(value: number, strandsSold: number): void;
+  /** Hay dumped onto the kiosk conveyor; the sale itself rings when the belt delivers it. */
+  dump(n: number): void;
   buy(id: ItemId): void;
   upgrade(id: UpgradeId, price: number): void;
   /** Ran out of stamina. */
@@ -54,6 +57,10 @@ export interface World {
   board: THREE.Object3D;
   containers: ContainerProps;
   needles: NeedleField;
+  /** The kiosk conveyor: dumps ride up and pay on delivery. */
+  belt: BeltIO;
+  /** A point at the kiosk window, for feedback. */
+  counterTop: THREE.Vector3;
   /** Where something dropped at (x, z) from `maxY` comes to rest. */
   support(x: number, z: number, maxY: number, r: number): number;
   /** Keeps a put-down container inside the room the player stands in. */
@@ -209,7 +216,7 @@ export class Game {
       case 'counter': {
         const n = this.carried + (held ? this.inv.state(held.id).fill : 0);
         hint = n > 0 ? t('hint.sell', { strands: strands(n), money: fmtMoney(n * this.price) }) : t('hint.sellEmpty');
-        if (use) this.sell();
+        if (use && n > 0) this.dumpToBelt();
         break;
       }
       case 'shop':
@@ -245,6 +252,9 @@ export class Game {
     }
     if (this.noticeT > 0) hint = this.hint; // keep the notice up for a moment
     else this.hint = live ? hint : '';
+
+    // The conveyor pays when its cargo drops into the booth.
+    this.completeSale(this.world.belt.takeArrived());
 
     // Detector: from the coil, a little ahead of the eyes.
     const cam = this.camera.position;
@@ -388,21 +398,29 @@ export class Game {
     return got;
   }
 
-  /** Sells what is in the hands plus a held container. */
-  sell(): number {
+  /** Empties the hands (and a held container) onto the kiosk conveyor; the belt pays on delivery. */
+  dumpToBelt(): number {
     const held = this.inv.held;
     const inBox = held ? this.inv.state(held.id).fill : 0;
     const n = this.carried + inBox;
     if (n <= 0) return 0;
-    const value = n * this.price;
-    this.money += value;
     this.carried = 0;
     if (held) this.inv.state(held.id).fill = 0;
     if (inBox > 0) this.stats.containerSold = true;
+    this.world.belt.dump(n);
+    this.cooldown = Math.max(this.cooldown, 0.25);
+    this.ev.dump(n);
+    return n;
+  }
+
+  /** Pays for strands the conveyor has dropped into the booth. */
+  private completeSale(n: number): void {
+    if (n <= 0) return;
+    const value = n * this.price;
+    this.money += value;
     this.stats.earned += value;
     this.stats.sold += n;
     this.ev.sell(value, n);
-    return value;
   }
 
   buy(id: ItemId): boolean {

@@ -7,7 +7,7 @@ import { timber } from './geo';
 import { boardTexture, priceTexture, signTexture } from './signs';
 
 // Furniture of the hangar, after the reference: the "sell hay" kiosk with a conveyor, the supply stall,
-// a storage shed, chalk A-frames, bollards and small clutter. Each builder works in local coordinates
+// chalk A-frames, bollards and small clutter. Each builder works in local coordinates
 // with the front facing +z; the caller places and turns it.
 
 export interface Mats {
@@ -48,7 +48,7 @@ export function bale(kit: Kit, m: Mats, x: number, y: number, z: number, ry: num
 }
 
 /** "Sell hay" kiosk: plank booth with a serving window, slanted roof, a sign on posts and a conveyor up to the window. */
-export function sellBooth(m: Mats): { kit: Kit; top: THREE.Vector3 } {
+export function sellBooth(m: Mats): { kit: Kit; top: THREE.Vector3; belt: { from: THREE.Vector3; to: THREE.Vector3 } } {
   const kit = new Kit();
   const W = 3.0, D = 2.2, H = 2.5, T = 0.08, fz = D / 2 - T / 2;
   kit.add(m.boards,
@@ -92,7 +92,8 @@ export function sellBooth(m: Mats): { kit: Kit; top: THREE.Vector3 } {
   bale(kit, m, -W / 2 - 0.75, 0, D / 2 + 0.45, Math.PI / 2 - 0.15);
   kit.solid(-W / 2 - 1.0, -W / 2 - 0.4, 0, 0.96, D / 2 - 0.75, D / 2 + 1.0);
   hitPane(kit, 2.0, 1.2, 0, 1.55, D / 2 + 0.05); // looking in through the window still counts
-  return { kit, top: new THREE.Vector3(0, 1.1, D / 2 + 0.2) };
+  // The conveyor path for cargo: from the low outer end up to the window sill.
+  return { kit, top: new THREE.Vector3(0, 1.1, D / 2 + 0.2), belt: { from: new THREE.Vector3(cx, y1, z1), to: new THREE.Vector3(cx, y0, z0) } };
 }
 
 /** Supply stall: counter under a red-trimmed awning, the price board on the back wall, a closed store room on the right. */
@@ -146,30 +147,6 @@ export function supplyStall(m: Mats): Kit {
   kit.solid(-0.6, 0.8, 0, 0.7, fz + 0.6, fz + 1.75);
   kit.solid(1.35, 1.95, 0, 0.8, fz + 0.5, fz + 1.0);
   hitPane(kit, 3.6, 2.0, -0.7, 1.9, fz - 0.1); // the open front over the counter
-  return kit;
-}
-
-/** Closed storage shed with a tin roof and a blank billboard on top, bales at both ends. */
-export function storageShed(m: Mats): Kit {
-  const kit = new Kit();
-  const L = 5.6, D = 2.5, H = 2.6;
-  kit.add(m.boards, worldBox(L, H, 0.08, 0, H / 2 + 0.12, D / 2 - 0.04), worldBox(L, H, 0.08, 0, H / 2 + 0.12, -D / 2 + 0.04),
-    worldBox(0.08, H, D, L / 2 - 0.04, H / 2 + 0.12, 0), worldBox(0.08, H, D, -L / 2 + 0.04, H / 2 + 0.12, 0));
-  for (const x of [-L / 2 + 0.2, 0, L / 2 - 0.2]) kit.add(m.beam, timber(0.16, 0.14, D + 0.1, x, 0.07, 0));
-  for (const sx of [-1, 1]) for (const sz of [-1, 1]) kit.add(m.beam, timber(0.1, H, 0.1, sx * L / 2, H / 2 + 0.12, sz * D / 2));
-  kit.add(m.beam, timber(L + 0.1, 0.1, 0.1, 0, H + 0.1, D / 2), timber(L + 0.1, 0.1, 0.1, 0, H + 0.1, -D / 2));
-  kit.add(m.metal, worldBox(L + 0.6, 0.04, D + 0.6, 0, H + 0.2, 0, 1.2));
-  kit.add(m.iron, timber(L + 0.62, 0.06, 0.04, 0, H + 0.19, D / 2 + 0.3), timber(L + 0.62, 0.06, 0.04, 0, H + 0.19, -D / 2 - 0.3));
-  // Billboard frame on top.
-  const by = H + 0.25;
-  for (const x of [-2.3, 2.3]) kit.add(m.beam, timber(0.13, 1.0, 0.13, x, by + 0.5, 0));
-  kit.add(m.beam, timber(4.74, 0.12, 0.13, 0, by + 0.98, 0), timber(4.74, 0.12, 0.13, 0, by + 0.1, 0));
-  kit.add(m.boards, worldBox(4.48, 0.76, 0.06, 0, by + 0.54, 0));
-  for (const sx of [-1, 1]) {
-    bale(kit, m, sx * (L / 2 + 0.62), 0, 0.15, Math.PI / 2);
-    bale(kit, m, sx * (L / 2 + 0.6), 0.48, 0.1, Math.PI / 2 + 0.06);
-  }
-  kit.solid(-L / 2 - 1.0, L / 2 + 1.0, 0, H + 0.3, -D / 2 - 0.05, D / 2 + 0.05);
   return kit;
 }
 

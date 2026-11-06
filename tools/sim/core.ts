@@ -19,6 +19,8 @@ export const LAYOUT = {
 
 /** Seconds spent on small actions. */
 const ACT = { pour: 0.3, take: 0.4, putDown: 0.4, sell: 0.3, shop: 2.5, tree: 1.5 };
+/** The kiosk conveyor ride before a dump is paid for (src/game/belt.ts). */
+const RIDE = 3.2;
 const DT = 0.05;
 const NO_PERKS: Perks = { price: 0, grab: 0, speed: 0, capacity: 0 };
 
@@ -86,7 +88,8 @@ class Player {
   sell(n: number): void {
     this.money += n * this.d.price;
     this.sold += n;
-    this.wait(ACT.sell);
+    // The dump itself is quick; the belt delivers while the player is already walking back.
+    this.wait(ACT.sell + RIDE * 0.5);
   }
 
   /** Stack → counter → stack with `tool` and the biggest container owned. Ends at the counter if `stayAtCounter`. */
