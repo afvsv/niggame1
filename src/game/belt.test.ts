@@ -2,10 +2,9 @@ import { describe, expect, it } from 'vitest';
 import * as THREE from 'three';
 import { Belt, BELT_RIDE_SECONDS } from './belt';
 
-const from = new THREE.Vector3(0, 0.3, 2.1);
-const to = new THREE.Vector3(0, 1.02, 0);
+const path = [new THREE.Vector3(0, 0.3, 2.1), new THREE.Vector3(0, 0.3, 1.0), new THREE.Vector3(0, 1.02, 0)]; // flat run, then the climb
 const wad = () => new THREE.Mesh(new THREE.BoxGeometry(0.1, 0.06, 0.1)); // stand-in for the straw pile
-const make = (onArrive?: (n: number) => void) => new Belt(from, to, wad, onArrive);
+const make = (onArrive?: (n: number) => void) => new Belt(path, wad, onArrive);
 
 /** Steps the belt past the whole ride and the drop. */
 function ride(belt: Belt, dumps: number[] = []): void {

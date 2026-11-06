@@ -60,30 +60,121 @@ export function priceTexture(): THREE.CanvasTexture {
   return tex;
 }
 
-/** Chalk A-frame with a few standing reminders for a new yard hand. */
-export function tipsTexture(): THREE.CanvasTexture {
+function woodGrain(ctx: CanvasRenderingContext2D, W: number, H: number, base: string, dark: string): void {
+  ctx.fillStyle = base;
+  ctx.fillRect(0, 0, W, H);
+  for (let x = 0; x < W; x += 96 + Math.random() * 40) { // vertical planks
+    ctx.fillStyle = dark;
+    ctx.fillRect(x, 0, 3, H);
+  }
+  for (let i = 0; i < 700; i++) {
+    ctx.fillStyle = `rgba(60,45,25,${Math.random() * 0.09})`;
+    ctx.fillRect(Math.random() * W, Math.random() * H, 20 + Math.random() * 90, 1 + Math.random() * 2);
+  }
+}
+
+/** Wide whitewashed board with dark lettering: the supply stall sign, price tags, HAY IN. */
+export function signTextureLight(text: string, sub?: string): THREE.CanvasTexture {
+  const W = sub ? 1024 : 384, H = sub ? 288 : 160;
+  const c = document.createElement('canvas');
+  c.width = W; c.height = H;
+  const ctx = c.getContext('2d')!;
+  woodGrain(ctx, W, H, '#d3c5a2', '#b3a179');
+  ctx.strokeStyle = 'rgba(60,45,25,.5)';
+  ctx.lineWidth = 8;
+  ctx.strokeRect(6, 6, W - 12, H - 12);
+  ctx.fillStyle = '#38291a';
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  if (sub) {
+    ctx.font = `700 128px ${FONT}`;
+    ctx.fillText(text, W / 2, H / 2 - 42);
+    ctx.font = `500 40px ${FONT}`;
+    ctx.fillText(sub, W / 2, H / 2 + 74);
+    // Wheat ears flanking the title, like the reference.
+    for (const sx of [0.115, 0.885]) {
+      ctx.strokeStyle = '#38291a';
+      ctx.lineWidth = 4;
+      ctx.beginPath();
+      ctx.moveTo(W * sx, H / 2 - 90);
+      ctx.lineTo(W * sx, H / 2 + 6);
+      ctx.stroke();
+      for (let k = 0; k < 6; k++) {
+        const y = H / 2 - 84 + k * 16;
+        ctx.beginPath();
+        ctx.moveTo(W * sx, y);
+        ctx.lineTo(W * sx + (sx < 0.5 ? -1 : 1) * 22, y - 12);
+        ctx.moveTo(W * sx, y + 8);
+        ctx.lineTo(W * sx + (sx < 0.5 ? -1 : 1) * 22, y - 4);
+        ctx.stroke();
+      }
+    }
+  } else {
+    let size = 72;
+    do ctx.font = `700 ${size}px ${FONT}`; while (ctx.measureText(text).width > W - 56 && --size > 24);
+    ctx.fillText(text, W / 2, H / 2 + 4);
+  }
+  const tex = new THREE.CanvasTexture(c);
+  tex.colorSpace = THREE.SRGBColorSpace;
+  tex.anisotropy = 4;
+  return tex;
+}
+
+/** Big dark board with huge lettering: the SELL HAY sign across the whole kiosk. */
+export function bigSignTexture(text: string): THREE.CanvasTexture {
+  const c = document.createElement('canvas');
+  c.width = 1024; c.height = 256;
+  const ctx = c.getContext('2d')!;
+  ctx.fillStyle = '#241c12';
+  ctx.fillRect(0, 0, 1024, 256);
+  for (let x = 0; x < 1024; x += 130) {
+    ctx.fillStyle = 'rgba(0,0,0,.35)';
+    ctx.fillRect(x, 0, 4, 256);
+  }
+  for (let i = 0; i < 500; i++) {
+    ctx.fillStyle = `rgba(236,230,211,${Math.random() * 0.05})`;
+    ctx.fillRect(Math.random() * 1024, Math.random() * 256, 30 + Math.random() * 80, 1 + Math.random() * 2);
+  }
+  ctx.fillStyle = '#e8e1cd';
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  let size = 168;
+  do ctx.font = `700 ${size}px ${FONT}`; while (ctx.measureText(text).width > 950 && --size > 80);
+  ctx.fillText(text, 512, 132);
+  const tex = new THREE.CanvasTexture(c);
+  tex.colorSpace = THREE.SRGBColorSpace;
+  tex.anisotropy = 4;
+  return tex;
+}
+
+/** Dark A-frame listing every shop price, like the reference PRICES board. */
+export function priceListTexture(): THREE.CanvasTexture {
   const W = 256, H = 384;
   const c = document.createElement('canvas');
   c.width = W; c.height = H;
   const ctx = c.getContext('2d')!;
-  ctx.fillStyle = '#22272a';
+  ctx.fillStyle = '#202622';
   ctx.fillRect(0, 0, W, H);
   for (let i = 0; i < 500; i++) {
     ctx.fillStyle = `rgba(236,230,211,${Math.random() * 0.05})`;
     ctx.fillRect(Math.random() * W, Math.random() * H, 2 + Math.random() * 10, 1 + Math.random() * 2);
   }
-  ctx.fillStyle = '#ece6d3';
   ctx.textAlign = 'center';
   ctx.textBaseline = 'middle';
+  ctx.fillStyle = '#ece6d3';
   ctx.font = `700 34px ${FONT}`;
-  ctx.fillText(t('tips.title').toUpperCase(), W / 2, 44);
-  ctx.fillRect(W / 2 - 70, 72, 140, 3);
-  const lines = ['tips.line1', 'tips.line2', 'tips.line3'];
-  lines.forEach((key, i) => {
-    const text = t(key);
-    let size = 26;
-    do ctx.font = `500 ${size}px ${FONT}`; while (ctx.measureText(text).width > 216 && --size > 15);
-    ctx.fillText(text, W / 2, 130 + i * 84);
+  ctx.fillText(t('shop.prices').toUpperCase(), W / 2, 40);
+  ctx.fillRect(W / 2 - 56, 64, 112, 3);
+  ctx.textAlign = 'left';
+  SHOP_ITEMS.forEach((item, i) => {
+    const y = 104 + i * 46;
+    ctx.fillStyle = '#ece6d3';
+    ctx.font = `italic 500 24px ${FONT}`;
+    ctx.fillText(t(`item.${item.id}`), 20, y);
+    ctx.textAlign = 'right';
+    ctx.font = `italic 700 26px ${FONT}`;
+    ctx.fillText(`$${item.price}`, W - 20, y);
+    ctx.textAlign = 'left';
   });
   const tex = new THREE.CanvasTexture(c);
   tex.colorSpace = THREE.SRGBColorSpace;
@@ -91,66 +182,77 @@ export function tipsTexture(): THREE.CanvasTexture {
   return tex;
 }
 
-/** Chalkboard with pinned paper price tags: the whole shop assortment. */
-export function boardTexture(): THREE.CanvasTexture {
-  const W = 1024, H = 640;
+/** Small whitewashed price tag for the front of a counter. */
+export function tagTexture(name: string, price: string): THREE.CanvasTexture {
   const c = document.createElement('canvas');
-  c.width = W; c.height = H;
+  c.width = 256; c.height = 128;
   const ctx = c.getContext('2d')!;
-  ctx.fillStyle = '#5b3d24';
-  ctx.fillRect(0, 0, W, H);
-  ctx.fillStyle = '#2f3a33';
-  ctx.fillRect(28, 28, W - 56, H - 56);
-  for (let i = 0; i < 1600; i++) { // chalk dust
-    ctx.fillStyle = `rgba(236,230,211,${Math.random() * 0.06})`;
-    ctx.fillRect(28 + Math.random() * (W - 56), 28 + Math.random() * (H - 56), 2 + Math.random() * 14, 1 + Math.random() * 2);
-  }
-  ctx.fillStyle = '#ece6d3';
-  ctx.font = `700 84px ${FONT}`;
+  woodGrain(ctx, 256, 128, '#cfc19d', '#ab9770');
+  ctx.strokeStyle = 'rgba(60,45,25,.5)';
+  ctx.lineWidth = 6;
+  ctx.strokeRect(4, 4, 248, 120);
+  ctx.fillStyle = '#38291a';
   ctx.textAlign = 'center';
   ctx.textBaseline = 'middle';
-  ctx.fillText(t('shop.sign').toUpperCase(), W / 2, 104);
-  ctx.fillRect(W / 2 - 220, 158, 440, 4);
-  SHOP_ITEMS.forEach((item, i) => {
-    const col = i % 3, row = Math.floor(i / 3);
-    const locked = !!item.requires;
-    ctx.save();
-    ctx.translate(200 + col * 312, 320 + row * 218);
-    ctx.rotate((col - 1) * 0.05 + (row ? 0.02 : -0.03));
-    ctx.scale(0.82, 0.82);
-    ctx.fillStyle = 'rgba(0,0,0,.25)';
-    ctx.fillRect(-128, -84, 268, 180);
-    ctx.fillStyle = locked ? '#d8c9a4' : '#efe3c2';
-    ctx.fillRect(-134, -92, 268, 180);
-    ctx.fillStyle = '#2b241b';
-    const name = t(`item.${item.id}`);
-    let size = 30;
-    do ctx.font = `500 ${size}px ${FONT}`; while (ctx.measureText(name).width > 236 && --size > 16);
-    ctx.fillText(name, 0, -36);
-    ctx.font = `700 58px ${FONT}`;
-    ctx.fillText(`$${item.price}`, 0, 30);
-    if (locked) {
-      // A small padlock instead of the red pin: the stall does not sell this one yet.
-      ctx.strokeStyle = '#4b4234';
-      ctx.lineWidth = 5;
-      ctx.beginPath();
-      ctx.arc(0, -72, 8, Math.PI, 0);
-      ctx.stroke();
-      ctx.fillStyle = '#4b4234';
-      ctx.fillRect(-12, -72, 24, 18);
-    } else {
-      ctx.fillStyle = '#b5523b';
-      ctx.beginPath();
-      ctx.arc(0, -78, 9, 0, Math.PI * 2);
-      ctx.fill();
-    }
-    ctx.restore();
-  });
+  let size = 30;
+  do ctx.font = `500 ${size}px ${FONT}`; while (ctx.measureText(name).width > 220 && --size > 14);
+  ctx.fillText(name, 128, 42);
+  ctx.font = `700 44px ${FONT}`;
+  ctx.fillText(price, 128, 92);
   const tex = new THREE.CanvasTexture(c);
   tex.colorSpace = THREE.SRGBColorSpace;
   tex.anisotropy = 4;
   return tex;
 }
+
+/** Dial face of the platform scale: needle at zero, a small readout window. */
+export function dialTexture(): THREE.CanvasTexture {
+  const c = document.createElement('canvas');
+  c.width = c.height = 256;
+  const ctx = c.getContext('2d')!;
+  ctx.fillStyle = '#d9d4c4';
+  ctx.beginPath();
+  ctx.arc(128, 128, 128, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.strokeStyle = '#33302a';
+  ctx.lineWidth = 10;
+  ctx.beginPath();
+  ctx.arc(128, 128, 120, 0, Math.PI * 2);
+  ctx.stroke();
+  for (let i = 0; i < 24; i++) {
+    const a = (i / 24) * Math.PI * 2;
+    ctx.strokeStyle = i % 6 ? '#33302a' : '#a33326';
+    ctx.lineWidth = i % 6 ? 3 : 6;
+    ctx.beginPath();
+    ctx.moveTo(128 + Math.cos(a) * 96, 128 + Math.sin(a) * 96);
+    ctx.lineTo(128 + Math.cos(a) * 112, 128 + Math.sin(a) * 112);
+    ctx.stroke();
+  }
+  ctx.strokeStyle = '#1d1c19';
+  ctx.lineWidth = 7;
+  ctx.lineCap = 'round';
+  ctx.beginPath();
+  ctx.moveTo(128, 128);
+  ctx.lineTo(128, 34);
+  ctx.stroke();
+  ctx.fillStyle = '#1d1c19';
+  ctx.beginPath();
+  ctx.arc(128, 128, 12, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.fillStyle = '#27332b';
+  ctx.fillRect(88, 150, 80, 40);
+  ctx.fillStyle = '#9fd06a';
+  ctx.font = `700 30px ${FONT}`;
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.fillText('0.000', 128, 171);
+  const tex = new THREE.CanvasTexture(c);
+  tex.colorSpace = THREE.SRGBColorSpace;
+  tex.anisotropy = 4;
+  return tex;
+}
+
+
 
 /** Needle board by the exit: six framed slots, filled in as needles are found. */
 export function needleBoard(): { tex: THREE.CanvasTexture; draw(found: readonly NeedleId[]): void } {

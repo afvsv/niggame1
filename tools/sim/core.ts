@@ -20,7 +20,7 @@ export const LAYOUT = {
 /** Seconds spent on small actions. */
 const ACT = { pour: 0.3, take: 0.4, putDown: 0.4, sell: 0.3, shop: 2.5, tree: 1.5 };
 /** The kiosk conveyor ride before a dump is paid for (src/game/belt.ts). */
-const RIDE = 3.2;
+const RIDE = 6.2;
 const DT = 0.05;
 const NO_PERKS: Perks = { price: 0, grab: 0, speed: 0, capacity: 0 };
 

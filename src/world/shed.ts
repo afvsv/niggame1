@@ -15,7 +15,7 @@ import { SUN_DIR } from './sky';
 import { timber } from './geo';
 import { Kit, prism, projectUV, tube, worldBox } from './kit';
 import { Mats, aFrame, bale, bollard, fernPot, hitPane, sellBooth, shadowed, supplyStall } from './booths';
-import { hazardTexture, ledClock, needleBoard, plateTexture, priceTexture, tipsTexture } from './signs';
+import { hazardTexture, ledClock, needleBoard, plateTexture, priceListTexture, priceTexture } from './signs';
 import { Belt } from '../game/belt';
 import { HayLoad } from '../tools/models';
 
@@ -260,8 +260,7 @@ export function buildShed(scene: THREE.Scene, colliders: Colliders, tex: Texture
   const counterTop = sell.top.clone().applyMatrix4(counter.matrixWorld);
   // The cargo on the belt is the same loose-straw pile the hands and tools show.
   const belt = new Belt(
-    sell.belt.from.clone().applyMatrix4(counter.matrixWorld),
-    sell.belt.to.clone().applyMatrix4(counter.matrixWorld),
+    sell.belt.points.map((p) => p.clone().applyMatrix4(counter.matrixWorld)),
     (n) => {
       const w = Math.cbrt(n / 15); // the pile grows with the load, like the handful does
       const pile = new HayLoad(Math.round(Math.min(220, 60 * w)), [0.16 * w, 0.1 * w, 0.16 * w], { pile: true, len: [0.05, 0.13], seed: 101 + n });
@@ -273,7 +272,7 @@ export function buildShed(scene: THREE.Scene, colliders: Colliders, tex: Texture
   group.add(belt.group);
   aFrame(m, priceTexture()).place(group, box, 10.9, -5.4, -Math.PI / 2 + 0.5);
   const shop = supplyStall(m).place(group, box, 13.25, 13.0, -Math.PI / 2);
-  aFrame(m, tipsTexture()).place(group, box, 11.6, 9.4, -Math.PI / 2 + 0.3);
+  aFrame(m, priceListTexture()).place(group, box, 11.6, 9.4, -Math.PI / 2 + 0.3);
 
   // Clutter: bollards, a tripod and a fern by the door, bales, crates and barrels along the walls.
   const rnd = mulberry32(19);
