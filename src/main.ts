@@ -138,8 +138,15 @@ const events: GameEvents = {
     audio.sale(n / Math.max(1, game.capacity));
     hud.pop(`+${fmtMoney(value)}`, 'good');
     hud.bumpMoney();
+    const c = shed.counterEnd;
+    particles.burst(c.x, c.y, c.z, 0, 1, 0, Math.min(30, 5 + n / 4));
+    persist();
+  },
+  loadBelt: (n) => {
+    audio.pour(n); vm.swing(0.3);
     const c = shed.counterTop;
-    particles.burst(c.x, c.y, c.z, 0, 1, 0, Math.min(60, 10 + n / 2));
+    particles.burst(c.x, c.y, c.z, 0, 1, 0, Math.min(50, 8 + n / 2));
+    persist();
   },
   buy: (id) => {
     audio.purchase();
@@ -187,6 +194,7 @@ const capOf = (id: ItemId) => (isContainer(id) ? game.containerCapacity(id) : 0)
 game.up.load(save?.upgrades);
 game.refreshPerks();
 if (save) {
+  game.conveyor.load(save.conveyor);
   game.money = save.money;
   game.carried = Math.min(save.carried, game.capacity);
   if (save.stats) game.stats = { ...game.stats, ...save.stats };
@@ -294,6 +302,7 @@ shop.onClose = onScreenClose;
 tree.onClose = onScreenClose;
 input.onLockChange = (locked) => {
   if (locked) { overlay.classList.add('hidden'); return; }
+  if (bench) return;
   persist();
   if (!screenOpen()) showPause();
 };
@@ -305,7 +314,7 @@ function persist(): void {
     money: game.money, carried: game.carried, inv: inv.serialize(),
     player: { x: player.pos.x, y: player.pos.y, z: player.pos.z, yaw: player.yaw, pitch: player.pitch },
     needles: needles.saves, tutorial: tutorial.step, stats: game.stats, escaped: game.escaped,
-    upgrades: game.up.serialize(),
+    upgrades: game.up.serialize(), conveyor: game.conveyor.serialize(),
   }, grid);
 }
 setInterval(persist, BALANCE.autosaveSeconds * 1000);
@@ -361,6 +370,7 @@ let benchUi = 0, benchShadow = 0;
 function startBench(): void {
   if (bench) return;
   benchBack = { g: { ...settings.graphics }, x: player.pos.x, y: player.pos.y, z: player.pos.z, yaw: player.yaw, pitch: player.pitch };
+  if (document.pointerLockElement) document.exitPointerLock();
   bench = new Benchmark((p) => {
     // MSAA is fixed when the page loads, so every preset runs with the current setting.
     Object.assign(settings.graphics, PRESETS[p], { antialias: settings.graphics.antialias });
@@ -454,8 +464,8 @@ function frame(now: number): void {
   player.canSprint = !game.stamina.exhausted;
   vm.steady = game.d.sway;
   player.update(dt, input);
-  game.update(dt, input.locked && player.sprinting);
-  if (input.locked && input.wasPressed('Tab')) openTree();
+  if (!bench) game.update(dt, input.locked && player.sprinting);
+  if (!bench && input.locked && input.wasPressed('Tab')) openTree();
   vm.update(dt, { speed: Math.hypot(player.vel.x, player.vel.z), onGround: player.onGround, mouseDX: input.mouseDX, mouseDY: input.mouseDY });
   const load = game.load();
   vm.setLoad(load ? load[0] / load[1] : 0);
@@ -464,6 +474,7 @@ function frame(now: number): void {
   stackView.update(5);
   containers.update(dt, (id, x, z, maxY) => support(x, z, maxY, CONTAINER_WORLD[id].radius), capOf);
   needles.update(dt, grid, (x, z, maxY) => support(x, z, maxY, 0.04));
+  shed.setConveyor(input.locked && !bench ? dt : 0, game.conveyor.deliveries);
   const doorMoving = shed.update(dt);
   if (stackView.changed || containers.moved || doorMoving) { shadowDirty = true; stackView.changed = containers.moved = false; }
   // Each refresh draws the scene once more into the shadow map; 30 a second is plenty for digging and the door.

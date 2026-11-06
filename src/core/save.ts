@@ -1,6 +1,7 @@
 import type { InventorySave } from '../game/Inventory';
 import type { NeedleSave } from '../game/needles';
 import type { Stats } from '../game/Game';
+import type { Delivery } from '../game/conveyor';
 import type { Levels } from '../data/upgrades';
 import { HayGrid } from '../haystack/grid';
 
@@ -18,6 +19,7 @@ export interface SaveData {
   tutorial?: number;
   stats?: Stats;
   escaped?: boolean;
+  conveyor?: Delivery[]; // hay already loaded onto the belt
   upgrades?: Levels; // added in 0.4
 }
 
