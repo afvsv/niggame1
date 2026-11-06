@@ -99,10 +99,12 @@ export function sellBooth(m: Mats): { kit: Kit; top: THREE.Vector3; belt: { poin
     kit.add(m.steel, new THREE.BoxGeometry(0.05, 0.3, 0.05).translate(cx + s * 0.26, 0.15, z));
     kit.add(m.steel, new THREE.BoxGeometry(0.16, 0.03, 0.16).translate(cx + s * 0.26, 0.015, z));
   }
-  const a = Math.atan2(p1.y - p2.y, p1.z - p2.z), zc = (p1.z + p2.z) / 2, yc = (p1.y + p2.y) / 2; // sloping down from the sill
+  // Ramp from the sill (high, near the window) down to the knee: the +z end of the box must land
+  // on the knee, so the slope sign follows (sill.y - knee.y) over the +z run toward the knee.
+  const a = Math.atan2(p2.y - p1.y, p1.z - p2.z), zc = (p1.z + p2.z) / 2, yc = (p1.y + p2.y) / 2;
   kit.add(m.rubber, new THREE.BoxGeometry(0.5, 0.05, rampL).rotateX(a).translate(cx, yc, zc));
   for (const s of [-1, 1]) kit.add(m.steel, new THREE.BoxGeometry(0.05, 0.15, rampL + 0.12).rotateX(a).translate(cx + s * 0.28, yc + 0.02, zc));
-  for (const [z, y] of [[p1.z, p1.y], [p2.z, p2.y]]) kit.add(m.steel, new THREE.CylinderGeometry(0.065, 0.065, 0.6, 12).rotateZ(Math.PI / 2).translate(cx, y - 0.02, z));
+  for (const [z, y] of [[p0.z, p0.y], [p1.z, p1.y], [p2.z, p2.y]]) kit.add(m.steel, new THREE.CylinderGeometry(0.065, 0.065, 0.6, 12).rotateZ(Math.PI / 2).translate(cx, y - 0.02, z));
   for (const s of [-1, 1]) {
     kit.add(m.steel, new THREE.BoxGeometry(0.05, p2.y - 0.05, 0.05).translate(cx + s * 0.26, (p2.y - 0.05) / 2, p2.z + 0.15));
     kit.add(m.steel, new THREE.BoxGeometry(0.16, 0.03, 0.16).translate(cx + s * 0.26, 0.015, p2.z + 0.15));
