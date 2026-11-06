@@ -140,7 +140,7 @@ export function sellBooth(m: Mats): { kit: Kit; top: THREE.Vector3; belt: { poin
 
 /** Supply stall: wide SUPPLY CO sign over the awning, an OPEN sign and a lantern,
  *  shelves stocked to the back wall, goods on the counter with price tags on its front,
- *  tools hanging on the wall and the wheelbarrow display with its own price post. */
+ *  tools hanging on the wall. */
 export function supplyStall(m: Mats): Kit {
   const kit = new Kit();
   const W = 5.0, D = 2.6, bz = -D / 2 + 0.04, fz = D / 2;
