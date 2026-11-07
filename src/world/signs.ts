@@ -35,29 +35,58 @@ export function signTexture(text: string): THREE.CanvasTexture {
   return tex;
 }
 
-/** Chalk A-frame with the current price per strand. */
-export function priceTexture(): THREE.CanvasTexture {
+/** "$0.044" below a dollar (3 decimals), "$1.25" from a dollar: perks make tiny prices real. */
+export function priceText(price: number): string {
+  return `$${price.toFixed(price < 1 ? 3 : 2)}`;
+}
+
+export interface PriceBoard {
+  texture: THREE.CanvasTexture;
+  /** The currently drawn price text. */
+  readonly text: string;
+  /** How many times the canvas has been repainted (test aid). */
+  readonly redraws: number;
+  /** Repaints with `price`; a no-op while the formatted text is unchanged. */
+  update(price: number): void;
+}
+
+/** Chalk price board that can be redrawn when the price changes (needle perks, the deal upgrade). */
+export function createPriceBoard(): PriceBoard {
   const W = 256, H = 384;
   const c = document.createElement('canvas');
   c.width = W; c.height = H;
   const ctx = c.getContext('2d')!;
-  ctx.fillStyle = '#22272a';
-  ctx.fillRect(0, 0, W, H);
-  for (let i = 0; i < 500; i++) {
-    ctx.fillStyle = `rgba(236,230,211,${Math.random() * 0.05})`;
-    ctx.fillRect(Math.random() * W, Math.random() * H, 2 + Math.random() * 10, 1 + Math.random() * 2);
-  }
-  ctx.fillStyle = '#ece6d3';
-  ctx.textAlign = 'center';
-  ctx.textBaseline = 'middle';
-  ctx.font = `700 64px ${FONT}`;
-  ctx.fillText(`$${BALANCE.hay.pricePerStrand.toFixed(2)}`, W / 2, H / 2 - 30);
-  ctx.font = `700 30px ${FONT}`;
-  ctx.fillText(t('counter.price').toUpperCase(), W / 2, H / 2 + 30);
   const tex = new THREE.CanvasTexture(c);
   tex.colorSpace = THREE.SRGBColorSpace;
   tex.anisotropy = 4;
-  return tex;
+  const board: PriceBoard = {
+    texture: tex,
+    text: '',
+    redraws: 0,
+    update(price: number): void {
+      const text = priceText(price);
+      if (text === board.text) return; // repaint only when the price actually changed
+      const self = board as { text: string; redraws: number };
+      self.text = text;
+      self.redraws++;
+      ctx.fillStyle = '#22272a';
+      ctx.fillRect(0, 0, W, H);
+      for (let i = 0; i < 500; i++) {
+        ctx.fillStyle = `rgba(236,230,211,${Math.random() * 0.05})`;
+        ctx.fillRect(Math.random() * W, Math.random() * H, 2 + Math.random() * 10, 1 + Math.random() * 2);
+      }
+      ctx.fillStyle = '#ece6d3';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.font = `700 64px ${FONT}`;
+      ctx.fillText(text, W / 2, H / 2 - 30);
+      ctx.font = `700 30px ${FONT}`;
+      ctx.fillText(t('counter.price').toUpperCase(), W / 2, H / 2 + 30);
+      tex.needsUpdate = true;
+    },
+  };
+  board.update(BALANCE.hay.pricePerStrand); // the initial paint
+  return board;
 }
 
 function woodGrain(ctx: CanvasRenderingContext2D, W: number, H: number, base: string, dark: string): void {

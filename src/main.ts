@@ -171,6 +171,7 @@ const events: GameEvents = {
     hud.bumpMoney();
     hotbar.render(inv, capOf);
     if (id === 'belt_plans') hud.toast(t('build.plansKicker'), t('build.plansTitle'), rich(t('build.plansText')), 'needle', 8);
+    shed.updatePriceBoards(game.price);
     persist();
   },
   tired: () => hud.flashStamina(),
@@ -185,6 +186,7 @@ const events: GameEvents = {
     const id = needles.id(i);
     hud.toast(t('toast.needle', { n: needles.found.length, total: needles.total }), needleName(id), needlePerk(id));
     shed.setNeedles(needles.found);
+    shed.updatePriceBoards(game.price);
     persist();
   },
   unlocked: () => setTimeout(() => {
@@ -217,6 +219,7 @@ const buildMode = new BuildMode({
 // Upgrades change capacities and gate the plans, so they load before the buildings do.
 game.up.load(save?.upgrades);
 game.refreshPerks();
+shed.updatePriceBoards(game.price); // boards are painted at build time with the base price: refresh from the save
 if (save) {
   game.money = save.money;
   game.carried = Math.min(save.carried, game.capacity);

@@ -15,7 +15,7 @@ import { SUN_DIR } from './sky';
 import { timber } from './geo';
 import { Kit, prism, projectUV, tube, worldBox } from './kit';
 import { KIOSK_PLACEMENT, LIST_FRAME, Mats, PRICE_FRAME, STALL_PLACEMENT, aFrame, bale, bollard, fernPot, hitPane, sellBooth, shadowed, supplyStall } from './booths';
-import { hazardTexture, ledClock, needleBoard, plateTexture, priceListTexture, priceTexture } from './signs';
+import { hazardTexture, ledClock, needleBoard, plateTexture, priceListTexture, createPriceBoard } from './signs';
 import { Belt } from '../game/belt';
 import { HayLoad } from '../tools/models';
 
@@ -36,6 +36,8 @@ export interface Shed {
   inside(x: number, z: number): boolean;
   /** Shows found needles on the board. */
   setNeedles(found: readonly NeedleId[]): void;
+  /** Redraws every price board with the current price (needle perks, the deal upgrade). */
+  updatePriceBoards(price: number): void;
   /** Drops the lock and rolls the door up; `instant` for loading an opened hangar. */
   unlock(instant?: boolean): void;
   /** Returns true while something that casts shadows is moving. `play` rides the kiosk belt. */
@@ -273,7 +275,8 @@ export function buildShed(scene: THREE.Scene, colliders: Colliders, tex: Texture
     },
   );
   group.add(belt.group);
-  aFrame(m, priceTexture()).place(group, box, PRICE_FRAME.x, PRICE_FRAME.z, PRICE_FRAME.ry);
+  const priceBoard = createPriceBoard();
+  aFrame(m, priceBoard.texture).place(group, box, PRICE_FRAME.x, PRICE_FRAME.z, PRICE_FRAME.ry);
   const shop = supplyStall(m).place(group, box, STALL_PLACEMENT.x, STALL_PLACEMENT.z, STALL_PLACEMENT.ry);
   aFrame(m, priceListTexture()).place(group, box, LIST_FRAME.x, LIST_FRAME.z, LIST_FRAME.ry);
 
@@ -379,6 +382,10 @@ export function buildShed(scene: THREE.Scene, colliders: Colliders, tex: Texture
     exited: (x) => x > HX + 1.0,
     inside: (x, z) => Math.abs(x) < HX && Math.abs(z) < HZ,
     setNeedles: (found) => boardTex.draw(found),
+    updatePriceBoards: (price) => {
+      priceBoard.update(price);
+      sell.priceBoard.update(price);
+    },
     unlock,
     update: (dt, play = true) => {
       nature.update(dt); tickClock(dt);

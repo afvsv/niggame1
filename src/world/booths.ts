@@ -6,7 +6,8 @@ import { itemById } from '../data/tools';
 import { RoundedBoxGeometry } from 'three/examples/jsm/geometries/RoundedBoxGeometry.js';
 import { Kit, worldBox } from './kit';
 import { timber } from './geo';
-import { bigSignTexture, dialTexture, priceTexture, signTextureLight, tagTexture } from './signs';
+import { bigSignTexture, dialTexture, createPriceBoard, signTextureLight, tagTexture } from './signs';
+import type { PriceBoard } from './signs';
 
 // Furniture of the hangar, after the reference: the "sell hay" kiosk with a conveyor, the supply stall,
 // chalk A-frames, bollards and small clutter. Each builder works in local coordinates
@@ -76,7 +77,7 @@ export function bale(kit: Kit, m: Mats, x: number, y: number, z: number, ry: num
 
 /** "Sell hay" kiosk: plank booth with a serving window, a wide sign, a stocked interior,
  *  the Z-shaped conveyor up to the window, a HAY IN gantry at its low end and a platform scale. */
-export function sellBooth(m: Mats): { kit: Kit; top: THREE.Vector3; belt: { points: THREE.Vector3[] } } {
+export function sellBooth(m: Mats): { kit: Kit; top: THREE.Vector3; belt: { points: THREE.Vector3[] }; priceBoard: PriceBoard } {
   const kit = new Kit();
   const W = 3.0, D = 2.2, H = 2.5, T = 0.08, fz = D / 2 - T / 2;
   kit.add(m.boards,
@@ -147,9 +148,10 @@ export function sellBooth(m: Mats): { kit: Kit; top: THREE.Vector3; belt: { poin
   register.traverse((o) => { if (o instanceof THREE.Mesh) o.castShadow = true; });
   kit.group.add(register);
   // The price card on a clear stretch of the back wall, right of the register, pinned at the corners.
+  const priceBoard = createPriceBoard();
   const board = new THREE.Group();
   board.name = 'price-card';
-  const cardFace = new THREE.Mesh(new THREE.PlaneGeometry(0.8, 1.1), new THREE.MeshStandardMaterial({ map: priceTexture(), roughness: 0.95 }));
+  const cardFace = new THREE.Mesh(new THREE.PlaneGeometry(0.8, 1.1), new THREE.MeshStandardMaterial({ map: priceBoard.texture, roughness: 0.95 }));
   const pinMat = new THREE.MeshStandardMaterial({ color: '#3b3a38', roughness: 0.5, metalness: 0.6 });
   for (const dx of [-0.36, 0.36]) {
     const pin = new THREE.Mesh(new THREE.BoxGeometry(0.025, 0.025, 0.03), pinMat);
@@ -247,7 +249,7 @@ export function sellBooth(m: Mats): { kit: Kit; top: THREE.Vector3; belt: { poin
   bale(kit, m, -1.9, 0, 3.9, Math.PI / 2 - 0.15, 'bale-kiosk-3');
   kit.solid(-2.55, -1.6, 0, 0.96, 2.1, 4.5);
   hitPane(kit, 2.0, 1.2, 0, 1.55, D / 2 + 0.05); // looking in through the window still counts
-  return { kit, top: new THREE.Vector3(0, 1.1, D / 2 + 0.2), belt: { points: [p0, p1, p2] } };
+  return { kit, top: new THREE.Vector3(0, 1.1, D / 2 + 0.2), belt: { points: [p0, p1, p2] }, priceBoard };
 }
 
 /** Supply stall: wide SUPPLY CO sign over the awning, an OPEN sign and a lantern,
