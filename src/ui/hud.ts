@@ -54,6 +54,7 @@ export class Hud {
   private stamina = $('stamina');
   private staminaFill = $('stamina').querySelector('i')!;
   private treeNew = $('hud-tree-new');
+  private devLabel = $('hud-dev');
   private fullT = 0;
   private labelsRoot = $('labels');
   private labels = new Map<string, { el: HTMLElement; title: HTMLElement; value: HTMLElement }>();
@@ -67,6 +68,11 @@ export class Hud {
     $('signal-label').textContent = t('hud.signal');
     $('stamina-label').textContent = t('hud.stamina');
     $('hud-tree-label').textContent = t('hud.tree');
+  }
+
+  /** Developer-mode badge: a small yellow DEV tag in the top-right corner, hidden in the normal game. */
+  setDev(on: boolean): void {
+    this.devLabel.classList.toggle('hidden', !on);
   }
 
   private changed(key: string, value: string): boolean {

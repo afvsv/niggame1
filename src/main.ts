@@ -6,7 +6,8 @@ import { Audio } from './core/audio';
 import { fmtMoney } from './core/format';
 import { rich, setLang, t } from './core/i18n';
 import { Input } from './core/input';
-import { clearSave, loadSave, writeSave } from './core/save';
+import { clearSave, loadSave, setSaveKey, writeSave } from './core/save';
+import { devModeEnabled } from './core/devmode';
 import { HayParticles } from './fx/particles';
 import { ALL_ITEMS, ItemId, isContainer, itemById } from './data/tools';
 import { NEEDLES } from './data/needles';
@@ -47,6 +48,10 @@ import { SettingsScreen } from './ui/settings';
 
 const A = BALANCE.automation;
 const params = new URLSearchParams(location.search);
+// Dev mode: ?dev plus a dev environment (the dev server, or a VITE_DEV_TOOLS=1 build).
+// Its own save slot, a DEV badge and infinite money; a normal build never enables it.
+const devMode = devModeEnabled(params, import.meta.env as { DEV: boolean; VITE_DEV_TOOLS?: string });
+if (devMode) setSaveKey('niggame.save.dev'); // dev progress never overwrites the normal save
 if (params.has('reset')) clearSave();
 
 // Settings come first: language and MSAA are fixed at start.
@@ -115,6 +120,7 @@ const particles = new HayParticles();
 scene.add(particles.object);
 const audio = new Audio();
 const hud = new Hud();
+hud.setDev(devMode);
 const inv = new Inventory();
 inv.load(save?.inv);
 if (!gridOk) for (const st of inv.containers.values()) st.placed = null; // they stood by the old stack
@@ -507,6 +513,7 @@ function frame(now: number): void {
   player.jumpSpeed = game.d.jumpSpeed;
   player.canSprint = !game.stamina.exhausted;
   vm.steady = game.d.sway;
+  if (devMode) game.money = 1_000_000_000; // infinite money: topped up every frame, before any spending
   player.update(dt, input);
   // Fixed 20 Hz factory tick, independent of the render rate; the yard sleeps on the pause card and screens.
   if (factoryActive(input.locked, screenOpen())) {
@@ -615,5 +622,6 @@ requestAnimationFrame(frame);
 (window as unknown as { __game: unknown }).__game = {
   game, player, grid, renderer, camera, scene, persist, inv, shop, icons, vm, settings, settingsScreen, applySettings, sun, needles, containers, shed, tutorial, ending, hud, tree, factory, buildMode, views, buildScreen,
   input,
+  dev: devMode,
   step: (dtMs: number) => { manualFrame = true; try { frame(last + Math.max(0, Math.min(50, dtMs))); } finally { manualFrame = false; } },
 };

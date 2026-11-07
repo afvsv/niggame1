@@ -31,6 +31,8 @@ kbd { display: inline-flex; align-items: center; justify-content: center; min-wi
 #hud-money { font-size: 34px; font-weight: 700; line-height: 40px; color: var(--text); transform-origin: right center; }
 #hud-money.bump { animation: bump .32s cubic-bezier(.34, 1.56, .64, 1); }
 #hud-hay { font-size: 12px; font-weight: 600; letter-spacing: .05em; text-transform: uppercase; color: #d8d2bf; }
+#hud-dev { font-size: 12px; font-weight: 700; letter-spacing: .22em; text-transform: uppercase; color: var(--yellow); text-shadow: var(--outline); }
+#hud-dev.hidden { display: none; }
 #hud-pops { margin-top: 8px; display: flex; flex-direction: column; align-items: flex-end; gap: 4px; }
 .pop { font-weight: 700; font-size: 17px; animation: pop 1.2s ease-out forwards; }
 .pop.good { color: var(--green); }

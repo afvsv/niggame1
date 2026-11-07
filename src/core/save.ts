@@ -5,7 +5,12 @@ import type { Levels } from '../data/upgrades';
 import type { BeltCargo } from '../game/belt';
 import { HayGrid } from '../haystack/grid';
 
-const KEY = 'niggame.save.v1';
+const KEY_BASE = 'niggame.save';
+/** The slot of the current mode: the normal game (`*.v1`) or the dev mode (`*.dev`). */
+let KEY = `${KEY_BASE}.v1`;
+
+/** Points the save functions at a different slot, e.g. the dev mode's own progress. */
+export function setSaveKey(k: string): void { KEY = k; }
 
 export interface SaveData {
   v: 1;
