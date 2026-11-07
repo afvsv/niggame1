@@ -28,7 +28,7 @@ const shadowed = <T extends THREE.Mesh>(m: T): T => { m.castShadow = true; m.rec
 // ---------- machine models ----------
 
 /** Piston rake: a heavy frame that faces the stack and feeds the belt behind it. */
-function rakeModel(m: Mats): THREE.Group {
+export function rakeModel(m: Mats): THREE.Group {
   const kit = new Kit();
   kit.add(m.beam,
     worldBox(1.1, 0.14, 0.9, 0, 0.62, 0),
@@ -46,11 +46,12 @@ function rakeModel(m: Mats): THREE.Group {
   }
   kit.add(m.steel, worldBox(0.5, 0.06, 0.7, 0, 0.75, 0.55));
   for (const s of [-1, 1]) kit.add(m.steel, worldBox(0.05, 0.16, 0.7, s * 0.26, 0.72, 0.55));
+  kit.place(new THREE.Group(), () => {}, 0, 0); // merge the frame into real meshes; colliders are registered by the rules layer
   return kit.group;
 }
 
 /** Hay generator: a firebox on legs with a chimney and a fuel hatch. */
-function generatorModel(m: Mats): THREE.Group {
+export function generatorModel(m: Mats): THREE.Group {
   const kit = new Kit();
   kit.add(m.boards, worldBox(1.2, 1.0, 1.2, 0, 0.5, 0));
   kit.add(m.iron, worldBox(1.3, 0.12, 1.3, 0, 1.06, 0));
@@ -59,6 +60,7 @@ function generatorModel(m: Mats): THREE.Group {
   chimney.position.set(-0.35, 1.7, -0.3);
   kit.group.add(chimney);
   kit.add(m.iron, worldBox(0.16, 0.5, 0.16, -0.35, 0.25, 0.45), worldBox(0.16, 0.5, 0.16, 0.35, 0.25, 0.45));
+  kit.place(new THREE.Group(), () => {}, 0, 0); // merge the firebox into real meshes; colliders are registered by the rules layer
   return kit.group;
 }
 
@@ -213,7 +215,14 @@ export interface Ghost {
 /** A translucent preview that follows the aim point: green when placeable, red when not. */
 export function makeGhost(id: BuildingId): Ghost {
   const group = new THREE.Group();
-  const ghostMats = new Proxy({} as Mats, { get: () => ghostOk });
+  // one translucent material per slot, so the ghost merges its kit exactly like the real model does
+  const ghostCache = new Map<string | symbol, THREE.MeshStandardMaterial>();
+  const ghostMats = new Proxy({} as Mats, {
+    get: (_t, key) => {
+      if (!ghostCache.has(key)) ghostCache.set(key, ghostOk.clone());
+      return ghostCache.get(key)!;
+    },
+  });
   if (id === 'rake') group.add(rakeModel(ghostMats));
   if (id === 'generator') group.add(generatorModel(ghostMats));
   if (id === 'belt') {
