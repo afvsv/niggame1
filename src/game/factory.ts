@@ -36,6 +36,8 @@ export interface BuildingSave {
   rot: number;
   path?: number[][];
   cargo?: Array<[number, number]>;
+  /** Belts: strands waiting in the end buffer. */
+  pending?: number;
   fuel?: number;
 }
 
@@ -56,6 +58,8 @@ export class Factory {
     /** The kiosk belt's low end (HAY IN): belts ending near it hand their load over. */
     private readonly kiosk: Point2,
     private readonly onKioskDump?: (n: number) => void,
+    /** Current firebox capacity (Derived.fuelCap): limits the fuel clamp and manual refuelling. */
+    private readonly fuelCapOf: () => number = () => A.fuelCap,
   ) {}
 
   collidersCount(): number { return this.colliders.boxes.length; }
@@ -109,18 +113,50 @@ export class Factory {
 
   /** Fixed 20 Hz tick: power, generator burn, rakes. Rates come from the current Derived. */
   tick(dt: number, rates: RakeRates): void {
-    // Generators: burn in proportion to what they actually power.
+    // Power starts at zero and is only raised by a working generator in reach.
+    for (const m of this.buildings) if (m.id === 'rake') m.power = 0;
+    const kwOf = (): number => A.generatorKw + this.up.level('gen_out') * 2;
+    const rakes = this.buildings.filter((b) => b.id === 'rake');
     const gens = this.buildings.filter((b) => b.id === 'generator');
+    // Which generators reach each rake, and how much demand lands on each generator.
+    const gensOf = new Map<BuildingRef, BuildingRef[]>();
+    const loadByGen = new Map<BuildingRef, number>();
+    for (const m of rakes) {
+      const list = gens.filter((g) => Math.hypot(m.x - g.x, m.z - g.z) <= A.powerRadiusM);
+      gensOf.set(m, list);
+      for (const g of list) loadByGen.set(g, (loadByGen.get(g) ?? 0) + buildingById('rake').kw);
+    }
+    // Output: a generator with fuel gives min(its load, its capacity); an empty one gives 0.
+    const outByGen = new Map<BuildingRef, number>();
     for (const g of gens) {
-      const machines = this.buildings.filter((m) => m.id === 'rake' && Math.hypot(m.x - g.x, m.z - g.z) <= A.powerRadiusM);
-      const demand = machines.length * buildingById('rake').kw;
-      const out = (g.fuel ?? 0) > 0 ? Math.min(demand, A.generatorKw + this.up.level('gen_out') * 2) : 0;
-      const share = demand > 0 ? out / demand : 1;
-      if (out > 0) g.fuel = Math.max(0, (g.fuel ?? 0) - A.burnPerSec * (out / A.generatorKw) * dt);
-      for (const m of machines) m.power = share;
+      const load = loadByGen.get(g) ?? 0;
+      outByGen.set(g, (g.fuel ?? 0) > 0 ? Math.min(load, kwOf()) : 0);
+    }
+    // The whole powered network throttles together: total output / total demand.
+    // Overlapping radii must not double-count a rake's demand.
+    let totalOut = 0, totalDemand = 0;
+    for (const g of gens) if ((g.fuel ?? 0) > 0 && (loadByGen.get(g) ?? 0) > 0) totalOut += outByGen.get(g) ?? 0;
+    for (const list of gensOf.values()) {
+      if (!list.length) continue;
+      totalDemand += buildingById('rake').kw; // unique rakes only: gensOf keys are rakes
+    }
+    const share = totalDemand > 0 ? Math.min(1, totalOut / totalDemand) : 0;
+    for (const [m, list] of gensOf) {
+      if (list.length) m.power = share;
+    }
+    // Burn: each rake's actual draw is split across its sources in proportion to their capacity.
+    const drawByGen = new Map<BuildingRef, number>();
+    for (const [m, list] of gensOf) {
+      if (!list.length) continue;
+      const cap = list.length * kwOf();
+      const draw = buildingById('rake').kw * (m.power ?? 0);
+      for (const g of list) drawByGen.set(g, (drawByGen.get(g) ?? 0) + draw * (kwOf() / cap));
+    }
+    for (const [g, draw] of drawByGen) {
+      if (draw > 0) g.fuel = Math.max(0, (g.fuel ?? 0) - A.burnPerSec * (draw / A.generatorKw) * dt);
     }
     // Rakes: a fractional accumulator drains the grid in whole strands.
-    for (const m of this.buildings) if (m.id === 'rake') this.tickRake(m, dt, rates, m.power ?? 0);
+    for (const m of rakes) this.tickRake(m, dt, rates, m.power ?? 0);
     this.noRoom = this.wadCount() >= A.yardItemCap;
   }
 
@@ -147,7 +183,8 @@ export class Factory {
       const base: BuildingSave = { id: b.id, x: r2(b.x), z: r2(b.z), rot: r2(b.rot) };
       if (b.id === 'belt') {
         base.path = (b.path ?? []).map((p) => [r2(p.x), r2(p.y), r2(p.z)]);
-        base.cargo = b.conveyor?.serialize() ?? [];
+        base.cargo = b.conveyor?.serialize().wads ?? [];
+        base.pending = b.conveyor?.serialize().pending ?? 0;
       }
       if (b.id === 'generator') base.fuel = Math.round(b.fuel ?? 0);
       return base;
@@ -169,9 +206,13 @@ export class Factory {
           ? s.path.filter((p) => Array.isArray(p) && p.length >= 2 && p.every(Number.isFinite)).map((p) => ({ x: p[0], y: p[1] ?? 0.35, z: p[2] ?? 0 }))
           : [];
         if (pts.length >= 2) this.setBeltPath(ref, pts);
-        if (ref.conveyor && Array.isArray(s.cargo)) ref.conveyor.load(s.cargo);
+        if (ref.conveyor && Array.isArray(s.cargo)) {
+          ref.conveyor.load({ wads: s.cargo, pending: Number.isFinite(s.pending) ? s.pending : 0 });
+        }
       }
-      if (ref.id === 'generator' && Number.isFinite(s.fuel)) ref.fuel = Math.min(A.fuelCap, Math.max(0, s.fuel as number));
+      if (ref.id === 'generator' && Number.isFinite(s.fuel)) {
+        ref.fuel = Math.min(this.fuelCapOf(), Math.max(0, s.fuel as number));
+      }
     }
     return true;
   }

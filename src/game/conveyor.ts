@@ -14,6 +14,9 @@ export function pathLength(pts: readonly PathPoint[]): number {
   return len;
 }
 
+/** Serialized cargo: wads as [strands, metres] pairs plus the end buffer. */
+export interface ConveyorSave { wads: Array<[number, number]>; pending: number }
+
 /**
  * Player-built belt logic: wads measured in metres along the chain, minimum gaps, an end buffer.
  * Pure data — visuals (pooled wad meshes) live in the world layer.
@@ -42,9 +45,12 @@ export class Conveyor {
     return this.wads.length + (this.endPending > 0 ? 1 : 0);
   }
 
-  /** Places `n` strands at `s`; rejects overlaps (min gap) and the very end (that is the exit). */
+  /**
+   * Places `n` strands at `s`; rejects overlaps (min gap), the very end (that is the exit)
+   * and anything bigger than one wad — the caller splits big loads into wads at gap spacing.
+   */
   insert(n: number, s: number): boolean {
-    if (!(n > 0) || this.jammed) return false;
+    if (!(n > 0) || n > A.wadMaxStrands || this.jammed) return false;
     s = Math.max(0, Math.min(this.length, s));
     if (s >= this.length) return false;
     const i = this.findIndex(s);
@@ -56,7 +62,7 @@ export class Conveyor {
 
   /** Feed from a machine: merges into the start wad while it has room, else starts one at s = 0. */
   insertAtStart(n: number): boolean {
-    if (!(n > 0) || this.jammed) return false;
+    if (!(n > 0) || n > A.wadMaxStrands || this.jammed) return false;
     const first = this.wads[0];
     if (first && first.s < A.gapM) {
       if (first.n + n <= A.wadMaxStrands) { first.n += n; return true; }
@@ -94,24 +100,36 @@ export class Conveyor {
     return n;
   }
 
-  serialize(): Array<[number, number]> {
-    return this.wads.map((w) => [w.n, Math.round(w.s * 100) / 100]);
+  serialize(): ConveyorSave {
+    return {
+      wads: this.wads.map((w) => [w.n, Math.round(w.s * 100) / 100]),
+      pending: Math.round(this.endPending * 100) / 100,
+    };
   }
 
-  /** Loads validated wads; junk entries are dropped one by one. Returns false for a non-array. */
-  load(list: unknown): boolean {
-    if (!Array.isArray(list)) return false;
+  /**
+   * Loads validated cargo; junk entries are dropped one by one. Wads at s == length
+   * (saved right at the exit) are clamped just inside. Returns false for a non-object.
+   */
+  load(data: unknown): boolean {
+    if (!data || typeof data !== 'object') return false;
+    // Backwards compatibility: an old save may hold a bare array of [n, s] pairs.
+    const raw = Array.isArray(data) ? { wads: data as Array<[number, number]>, pending: 0 } : (data as Partial<ConveyorSave>);
+    if (!Array.isArray(raw.wads)) return false;
     const wads: BeltWad[] = [];
-    for (const item of list) {
+    for (const item of raw.wads) {
       if (!Array.isArray(item) || item.length !== 2) continue;
-      const [n, s] = item;
+      const [n, sRaw] = item;
       if (!Number.isFinite(n) || n <= 0 || n > A.wadMaxStrands) continue;
-      if (!Number.isFinite(s) || s < 0 || s >= this.length) continue;
-      wads.push({ n, s });
+      if (!Number.isFinite(sRaw) || sRaw < 0 || sRaw > this.length) continue;
+      wads.push({ n, s: Math.min(sRaw, this.length - 0.01) });
     }
     wads.sort((a, b) => a.s - b.s);
     this.wads.length = 0;
     this.wads.push(...wads);
+    const pending = Number.isFinite(raw.pending) ? Math.max(0, Math.min(A.wadMaxStrands, raw.pending as number)) : 0;
+    this.endPending = pending;
+    this.jammed = this.endPending >= A.wadMaxStrands;
     return true;
   }
 

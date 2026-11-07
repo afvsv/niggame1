@@ -53,6 +53,27 @@ describe('Conveyor', () => {
     expect(c.jammed).toBe(false);
   });
 
+  it('rejects an insert bigger than the wad cap', () => {
+    const c = make(4);
+    expect(c.insert(250, 1)).toBe(false); // a wheelbarrow dump: the caller splits it
+    expect(c.insert(A.wadMaxStrands, 1)).toBe(true);
+  });
+
+  it('keeps the end buffer and a waiting wad through a save round-trip', () => {
+    const c = make(2);
+    c.insert(A.wadMaxStrands, 0); // walks out into the end buffer
+    c.insert(60, 1.99); // the next wad, waiting right at the exit
+    c.update(10, 0.7);
+    expect(c.jammed).toBe(true); // buffer full, the waiting wad held at the exit
+    const totalBefore = c.total;
+    const data = c.serialize();
+    expect(data.pending).toBe(A.wadMaxStrands);
+    const loaded = make(2);
+    expect(loaded.load(data)).toBe(true);
+    expect(loaded.total).toBe(totalBefore);
+    expect(loaded.jammed).toBe(true);
+  });
+
   it('survives a save round-trip and rejects junk', () => {
     const c = make(4);
     c.insert(30, 0.5);

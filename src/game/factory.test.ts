@@ -126,6 +126,114 @@ describe('Factory', () => {
     expect(factory.noRoom).toBe(true);
   });
 
+  it('a rake without a working generator loses power and stops pulling', () => {
+    const { factory, gen, rake, grid } = rig();
+    gen.fuel = A.fuelCap;
+    factory.tick(0.05, { rakeRate: 12, rakeWidth: 1 });
+    expect(rake.power).toBeGreaterThan(0); // powered while the generator works
+    factory.demolish(gen);
+    const before = grid.total;
+    factory.tick(0.05, { rakeRate: 12, rakeWidth: 1 });
+    expect(rake.power).toBe(0); // the last share must not stick around
+    expect(grid.total).toBe(before); // no strands leave the grid
+  });
+
+  it('a rake outside every power radius has no power', () => {
+    const grid = makeGrid();
+    const factory = new Factory(grid, new Colliders(grid), upWithPlans(), { x: 99, z: 99 });
+    factory.place('generator', 0, -5, 0)!.fuel = A.fuelCap;
+    const far = factory.place('rake', 30, 30, 0)!; // far outside powerRadiusM
+    factory.tick(0.05, { rakeRate: 12, rakeWidth: 1 });
+    expect(far.power).toBe(0);
+  });
+
+  it('generators share the demand and burn in proportion to their capacity', () => {
+    const grid = makeGrid();
+    grid.data.fill(0); // hay is irrelevant here; keep every placement valid
+    const factory = new Factory(grid, new Colliders(grid), upWithPlans(), { x: 99, z: 99 });
+    const g1 = factory.place('generator', 0, -6, 0)!;
+    const g2 = factory.place('generator', 0, 6, 0)!;
+    g1.fuel = A.fuelCap;
+    g2.fuel = A.fuelCap;
+    const rakes: Array<{ power?: number }> = [];
+    for (let i = 0; i < 10; i++) {
+      const a = (i / 10) * Math.PI * 2; // even ring: neighbouring footprints never overlap
+      rakes.push(factory.place('rake', Math.cos(a) * 3, Math.sin(a) * 3, 0)!);
+    }
+    factory.tick(0.05, { rakeRate: 12, rakeWidth: 1 });
+    // demand 8 kW of 12 kW available: everyone runs at full power
+    const powers = rakes.map((r) => r.power);
+    expect(powers).toEqual(Array(10).fill(1));
+    const f1 = g1.fuel, f2 = g2.fuel;
+    factory.tick(1, { rakeRate: 12, rakeWidth: 1 }); // a whole second of burn
+    const burned1 = f1 - g1.fuel, burned2 = f2 - g2.fuel;
+    expect(burned1 + burned2).toBeCloseTo(A.burnPerSec * (8 / 6), 1); // 0.83 × 8/6 per second, shared
+    expect(burned1).toBeGreaterThan(0);
+    expect(burned2).toBeGreaterThan(0);
+  });
+
+  it('a dead generator does not burn and does not block the live one', () => {
+    const grid = makeGrid();
+    grid.data.fill(0);
+    const factory = new Factory(grid, new Colliders(grid), upWithPlans(), { x: 99, z: 99 });
+    const g1 = factory.place('generator', 0, -6, 0)!;
+    const g2 = factory.place('generator', 0, 6, 0)!;
+    g1.fuel = 0;
+    g2.fuel = 50;
+    const rake = factory.place('rake', 3, 0, 0)!;
+    factory.tick(1, { rakeRate: 12, rakeWidth: 1 });
+    expect(g1.fuel).toBe(0); // empty stays empty
+    expect(g2.fuel).toBeLessThan(50); // the live one burns
+    expect(rake.power).toBe(1); // 6 kW alone still covers the 0.8 kW rake
+  });
+
+  it('one generator overloaded by demand throttles the machines', () => {
+    const grid = makeGrid();
+    grid.data.fill(0);
+    const factory = new Factory(grid, new Colliders(grid), upWithPlans(), { x: 99, z: 99 });
+    const gen = factory.place('generator', 0, -4, 0)!;
+    gen.fuel = A.fuelCap;
+    const rakes: Array<{ power?: number }> = [];
+    for (let i = 0; i < 10; i++) {
+      const a = (i / 10) * Math.PI * 2; // all within this generator's power radius
+      rakes.push(factory.place('rake', Math.cos(a) * 3, -4 + Math.sin(a) * 3, 0)!);
+    }
+    factory.tick(0.05, { rakeRate: 12, rakeWidth: 1 });
+    // demand 8 kW, supply 6 kW: power = 0.75
+    expect(rakes.every((r) => Math.abs((r.power ?? 0) - 0.75) < 1e-9)).toBe(true);
+  });
+
+  it('belt cargo survives a full save round-trip without loss', () => {
+    const { factory, belt, gen } = rig();
+    gen.fuel = A.fuelCap;
+    belt.conveyor!.insert(A.wadMaxStrands, 0); // walks out into the end buffer
+    const last = belt.path![belt.path!.length - 1];
+    belt.conveyor!.insert(60, Math.hypot(last.x, last.z) - 0.01); // waiting right at the exit
+    factory.update(10, 0.7); // everything settles: the buffer is full, the wad waits
+    const before = belt.conveyor!.total;
+    const data = factory.serialize();
+    const saved = data.find((b) => b.id === 'belt')!;
+    expect(saved.pending).toBe(A.wadMaxStrands);
+    const grid2 = makeGrid();
+    const factory2 = new Factory(grid2, new Colliders(grid2), upWithPlans(), { x: 99, z: 99 });
+    expect(factory2.load(data)).toBe(true);
+    const belt2 = factory2.buildings.find((b) => b.id === 'belt')!;
+    expect(belt2.conveyor!.total).toBe(before);
+    expect(belt2.conveyor!.jammed).toBe(true);
+  });
+
+  it('the firebox upgrade raises the fuel cap on load', () => {
+    const grid = makeGrid();
+    grid.data.fill(0);
+    const factory = new Factory(grid, new Colliders(grid), upWithPlans(), { x: 99, z: 99 }, undefined, () => 150);
+    factory.place('generator', 0, -4, 0)!.fuel = 0;
+    const data = factory.serialize();
+    data[0].fuel = 140; // saved with a big firebox
+    const factory2 = new Factory(makeGrid(), new Colliders(makeGrid()), upWithPlans(), { x: 99, z: 99 }, undefined, () => 150);
+    expect(factory2.load(data)).toBe(true);
+    expect(factory2.buildings[0].fuel).toBe(140); // not clamped to the base 100
+  });
+
   it('survives a save round-trip and re-creates colliders', () => {
     const { factory, belt, gen } = rig();
     gen.fuel = 77;
