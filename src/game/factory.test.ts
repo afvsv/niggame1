@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { Factory } from './factory';
+import { Factory, factoryActive } from './factory';
 import { Upgrades } from './Upgrades';
 import { HayGrid } from '../haystack/grid';
 import { Colliders } from '../world/colliders';
@@ -248,5 +248,48 @@ describe('Factory', () => {
     const belt2 = factory2.buildings.find((b) => b.id === 'belt')!;
     expect(belt2.conveyor!.total).toBe(44);
     expect(factory2.buildings.find((b) => b.id === 'generator')!.fuel).toBe(77);
+  });
+
+  it('load drops a belt with fewer than two valid points', () => {
+    const { factory } = rig(); // the rig already carries a real 2-point belt
+    const stub = factory.place('belt', 6, 6, 0)!;
+    factory.setBeltPath(stub, [{ x: 6.1, y: 0.35, z: 6.2 }]); // a one-point path cannot exist in play
+    const data = factory.serialize();
+    expect(data.filter((b) => b.id === 'belt').length).toBe(2);
+    const factory2 = new Factory(makeGrid(), new Colliders(makeGrid()), upWithPlans(), { x: 99, z: 99 });
+    expect(factory2.load(data)).toBe(true);
+    const belts = factory2.buildings.filter((b) => b.id === 'belt');
+    expect(belts.length).toBe(1); // the stub is dropped, the real belt stays
+    expect(belts[0].path!.length).toBe(2);
+  });
+
+  it('the factory advances only while the player is in play', () => {
+    expect(factoryActive(true, false)).toBe(true);
+    expect(factoryActive(false, false)).toBe(false); // pause overlay: pointer unlocked
+    expect(factoryActive(true, true)).toBe(false); // shop, tree or build catalogue open
+  });
+
+  it('a 10 s open shop leaves belts and fuel untouched, play catches up after', () => {
+    const { grid, factory, gen, belt } = rig();
+    gen.fuel = 50;
+    belt.conveyor!.insertAtStart(40);
+    const hay0 = grid.total, cargo0 = belt.conveyor!.total;
+    let acc = 0;
+    // The main-loop pattern: the gate skips tick/update and drops the tick accumulator.
+    const step = (dt: number, locked: boolean, screen: boolean) => {
+      if (factoryActive(locked, screen)) {
+        acc += dt;
+        while (acc >= 0.05) { factory.tick(0.05, { rakeRate: 12, rakeWidth: 1 }); acc -= 0.05; }
+        factory.update(dt, 0.7);
+      } else acc = 0;
+    };
+    for (let i = 0; i < 100; i++) step(0.1, false, true); // 10 s behind the shop
+    expect(grid.total).toBe(hay0);
+    expect(belt.conveyor!.total).toBe(cargo0);
+    expect(gen.fuel).toBe(50);
+    for (let i = 0; i < 100; i++) step(0.1, true, false); // 10 s of play
+    expect(grid.total).toBeLessThan(hay0);
+    expect(belt.conveyor!.total).toBeGreaterThan(cargo0);
+    expect(gen.fuel).toBeLessThan(50);
   });
 });

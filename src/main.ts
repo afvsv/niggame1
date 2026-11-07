@@ -16,7 +16,7 @@ import { CONTAINER_WORLD, ContainerProps } from './game/containers';
 import { NeedleField, placeNeedles } from './game/needles';
 import { supportHeight } from './game/support';
 import { STEPS, Tutorial } from './game/tutorial';
-import { Factory } from './game/factory';
+import { Factory, factoryActive } from './game/factory';
 import { BuildMode } from './game/buildMode';
 import { BuildingViews, Ghost, inForbiddenZone, makeGhost } from './world/buildings';
 import { BuildScreen } from './ui/build';
@@ -466,6 +466,7 @@ if (params.has('bench')) setTimeout(startBench, 1500);
 // Main loop
 let last = performance.now(), fpsFrames = 0, fpsTime = 0, lastFps = 0, laggy = 0, perfHinted = false;
 let tickAcc = 0, noRoomShown = false;
+let manualFrame = false; // test steps drive frame() by hand and must not spawn the real loop
 /** Where the crosshair ray meets the build plane (y = 0). */
 function aimOnFloor(): { x: number; z: number } {
   const dir = new THREE.Vector3();
@@ -507,12 +508,14 @@ function frame(now: number): void {
   player.canSprint = !game.stamina.exhausted;
   vm.steady = game.d.sway;
   player.update(dt, input);
-  // Fixed 20 Hz factory tick, independent of the render rate.
-  tickAcc += dt;
-  while (tickAcc >= 0.05) { factory.tick(0.05, { rakeRate: game.d.rakeRate, rakeWidth: game.d.rakeWidth }); tickAcc -= 0.05; }
+  // Fixed 20 Hz factory tick, independent of the render rate; the yard sleeps on the pause card and screens.
+  if (factoryActive(input.locked, screenOpen())) {
+    tickAcc += dt;
+    while (tickAcc >= 0.05) { factory.tick(0.05, { rakeRate: game.d.rakeRate, rakeWidth: game.d.rakeWidth }); tickAcc -= 0.05; }
+    factory.update(dt, game.d.beltSpeed);
+  } else tickAcc = 0; // nothing may build up while paused: the next play frame starts from zero
   if (factory.noRoom && !noRoomShown) { noRoomShown = true; hud.pop(t('notice.noRoom'), 'spend'); }
   if (!factory.noRoom) noRoomShown = false;
-  factory.update(dt, game.d.beltSpeed);
   game.update(dt, input.locked && player.sprinting);
   if (input.locked && input.wasPressed('Tab')) openTree();
   if (input.locked && input.wasPressed('KeyB')) openBuild();
@@ -560,7 +563,7 @@ function frame(now: number): void {
   stackView.update(5);
   containers.update(dt, (id, x, z, maxY) => support(x, z, maxY, CONTAINER_WORLD[id].radius), capOf);
   needles.update(dt, grid, (x, z, maxY) => support(x, z, maxY, 0.04));
-  const doorMoving = shed.update(dt);
+  const doorMoving = shed.update(dt, factoryActive(input.locked, screenOpen()));
   if (stackView.changed || containers.moved || doorMoving) { shadowDirty = true; stackView.changed = containers.moved = false; }
   // Each refresh draws the scene once more into the shadow map; 30 a second is plenty for digging and the door.
   if (shadowDirty && now - shadowAt >= 33) { renderer.shadowMap.needsUpdate = true; shadowDirty = false; shadowAt = now; }
@@ -603,9 +606,14 @@ function frame(now: number): void {
   renderer.render(scene, camera);
   vm.render(renderer);
   input.endFrame();
-  requestAnimationFrame(frame);
+  if (!manualFrame) requestAnimationFrame(frame); // a manual step chains through `last`, no rAF of its own
 }
 requestAnimationFrame(frame);
 
-// Debug handle for tests and the browser console.
-(window as unknown as { __game: unknown }).__game = { game, player, grid, renderer, camera, scene, persist, inv, shop, icons, vm, settings, settingsScreen, applySettings, sun, needles, containers, shed, tutorial, ending, hud, tree, factory, buildMode, views, buildScreen };
+// Debug handle for tests and the browser console. `step(dtMs)` advances the whole game by hand:
+// the hidden-tab test harness has no rAF, and `input` lets it fake the pointer lock.
+(window as unknown as { __game: unknown }).__game = {
+  game, player, grid, renderer, camera, scene, persist, inv, shop, icons, vm, settings, settingsScreen, applySettings, sun, needles, containers, shed, tutorial, ending, hud, tree, factory, buildMode, views, buildScreen,
+  input,
+  step: (dtMs: number) => { manualFrame = true; try { frame(last + Math.max(0, Math.min(50, dtMs))); } finally { manualFrame = false; } },
+};

@@ -38,8 +38,8 @@ export interface Shed {
   setNeedles(found: readonly NeedleId[]): void;
   /** Drops the lock and rolls the door up; `instant` for loading an opened hangar. */
   unlock(instant?: boolean): void;
-  /** Returns true while something that casts shadows is moving. */
-  update(dt: number): boolean;
+  /** Returns true while something that casts shadows is moving. `play` rides the kiosk belt. */
+  update(dt: number, play?: boolean): boolean;
   /** Parts the graphics settings thin out or hide. */
   quality: { grass: THREE.InstancedMesh[]; floorStraws: THREE.InstancedMesh; beams: THREE.Object3D };
 }
@@ -380,11 +380,11 @@ export function buildShed(scene: THREE.Scene, colliders: Colliders, tex: Texture
     inside: (x, z) => Math.abs(x) < HX && Math.abs(z) < HZ,
     setNeedles: (found) => boardTex.draw(found),
     unlock,
-    update: (dt) => {
+    update: (dt, play = true) => {
       nature.update(dt); tickClock(dt);
       if (beams.group.visible) beams.update(dt);
       const doorMoving = animate(dt);
-      belt.update(dt); // belt cargo casts no shadows: never refreshes the shadow map
+      if (play) belt.update(dt); // the kiosk belt sleeps with the factory: no sales from the pause card
       return doorMoving;
     },
     quality: { grass: nature.grassPatches, floorStraws: strawCarpet, beams: beams.group },

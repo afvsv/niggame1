@@ -45,6 +45,9 @@ export interface RakeRates { rakeRate: number; rakeWidth: number }
 
 const MACHINE_HALF = 0.6; // machine footprint half-extent, metres
 
+/** The factory advances only while the player is in play: pointer locked and no screen open. */
+export const factoryActive = (locked: boolean, screenOpen: boolean): boolean => locked && !screenOpen;
+
 /** All player-built machines: placement, the fixed 20 Hz tick and per-frame belt motion. */
 export class Factory {
   readonly buildings: BuildingRef[] = [];
@@ -110,6 +113,14 @@ export class Factory {
     for (const box of ref.colliders) this.colliders.remove(box);
     const price = ref.id === 'belt' && ref.path ? A.beltPricePerM * pathLength(ref.path) : buildingById(ref.id).price;
     return Math.round(price * A.refundPct * 100) / 100;
+  }
+
+  /** Removes a building with no refund: belt stubs below two points and junk entries on load. */
+  discard(ref: BuildingRef): void {
+    const i = this.buildings.indexOf(ref);
+    if (i < 0) return;
+    this.buildings.splice(i, 1);
+    for (const box of ref.colliders) this.colliders.remove(box);
   }
 
   wadCount(): number {
@@ -212,7 +223,8 @@ export class Factory {
         const pts = Array.isArray(s.path)
           ? s.path.filter((p) => Array.isArray(p) && p.length >= 2 && p.every(Number.isFinite)).map((p) => ({ x: p[0], y: p[1] ?? 0.35, z: p[2] ?? 0 }))
           : [];
-        if (pts.length >= 2) this.setBeltPath(ref, pts);
+        if (pts.length < 2) { this.discard(ref); continue; } // a stub from an interrupted build is not a belt
+        this.setBeltPath(ref, pts);
         if (ref.conveyor && Array.isArray(s.cargo)) {
           ref.conveyor.load({ wads: s.cargo, pending: Number.isFinite(s.pending) ? s.pending : 0 });
         }
@@ -229,7 +241,7 @@ export class Factory {
     if (!end) return null;
     let best: BuildingRef | null = null, bestDist: number = A.joinTolM;
     for (const o of this.buildings) {
-      if (o === b || o.id !== 'belt' || !o.path?.length) continue;
+      if (o === b || o.id !== 'belt' || !o.path || o.path.length < 2) continue; // no hand-over to a stub
       const d = Math.hypot(o.path[0].x - end.x, o.path[0].z - end.z);
       if (d <= bestDist) { best = o; bestDist = d; }
     }
@@ -240,7 +252,7 @@ export class Factory {
     const fx = m.x + Math.sin(m.rot) * A.rakePickM, fz = m.z + Math.cos(m.rot) * A.rakePickM;
     let best: BuildingRef | null = null, bestDist: number = A.rakePickM;
     for (const o of this.buildings) {
-      if (o.id !== 'belt' || !o.path?.length) continue;
+      if (o.id !== 'belt' || !o.path || o.path.length < 2) continue; // a rake cannot pour onto a stub
       const d = Math.hypot(o.path[0].x - fx, o.path[0].z - fz);
       if (d <= bestDist) { best = o; bestDist = d; }
     }
