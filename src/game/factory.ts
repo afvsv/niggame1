@@ -88,6 +88,13 @@ export class Factory {
     return ref;
   }
 
+  /** Dry-run placement: plans owned and the footprint free (no money, no mutation). */
+  canPlace(id: BuildingId, x: number, z: number): boolean {
+    if (!this.plansOwned(id)) return false;
+    if (!buildingById(id).solid) return true;
+    return !this.colliders.collides(this.footprint(x, z));
+  }
+
   /** Replaces a belt chain (build mode); the load keeps riding on the new length. */
   setBeltPath(ref: BuildingRef, pts: PathPoint[]): void {
     ref.path = pts;

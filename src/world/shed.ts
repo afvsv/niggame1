@@ -27,6 +27,8 @@ export interface Shed {
   board: THREE.Object3D; // the needle board by the exit
   counterTop: THREE.Vector3;
   belt: Belt; // the kiosk conveyor: dumps ride up and pay on delivery
+  beltLow: THREE.Vector3; // the low end of the kiosk belt (HAY IN), world space
+  mats: Mats;
   spawn: THREE.Vector3;
   spawnYaw: number;
   /** True once the player has walked out through the exit. */
@@ -259,13 +261,14 @@ export function buildShed(scene: THREE.Scene, colliders: Colliders, tex: Texture
   const counter = sell.kit.place(group, box, 13.4, -8.3, -Math.PI / 2);
   const counterTop = sell.top.clone().applyMatrix4(counter.matrixWorld);
   // The cargo on the belt is the same loose-straw pile the hands and tools show.
+  const beltLow = sell.belt.points[0].clone().applyMatrix4(counter.matrixWorld);
   const belt = new Belt(
     sell.belt.points.map((p) => p.clone().applyMatrix4(counter.matrixWorld)),
     (n) => {
       const w = Math.cbrt(n / 15); // the pile grows with the load, like the handful does
       const pile = new HayLoad(Math.round(Math.min(220, 60 * w)), [0.16 * w, 0.1 * w, 0.16 * w], { pile: true, len: [0.05, 0.13], seed: 101 + n });
       pile.set(1);
-      pile.mesh.castShadow = true;
+      pile.mesh.castShadow = false; // cargo shadows would redraw the shadow map every frame
       return pile.mesh;
     },
   );
@@ -371,7 +374,7 @@ export function buildShed(scene: THREE.Scene, colliders: Colliders, tex: Texture
   };
 
   return {
-    group, counter, shop, door, board, counterTop, belt,
+    group, counter, shop, door, board, counterTop, belt, beltLow, mats: m,
     spawn: new THREE.Vector3(-2.0, 0, 18.6), spawnYaw: -0.35,
     exited: (x) => x > HX + 1.0,
     inside: (x, z) => Math.abs(x) < HX && Math.abs(z) < HZ,
@@ -380,7 +383,9 @@ export function buildShed(scene: THREE.Scene, colliders: Colliders, tex: Texture
     update: (dt) => {
       nature.update(dt); tickClock(dt);
       if (beams.group.visible) beams.update(dt);
-      return animate(dt) || belt.update(dt);
+      const doorMoving = animate(dt);
+      belt.update(dt); // belt cargo casts no shadows: never refreshes the shadow map
+      return doorMoving;
     },
     quality: { grass: nature.grassPatches, floorStraws: strawCarpet, beams: beams.group },
   };
