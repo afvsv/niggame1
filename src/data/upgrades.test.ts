@@ -59,32 +59,10 @@ describe('upgrades', () => {
     expect(u.levels).toEqual({ boots: 5, deal: 2 });
   });
 
-  it('chains the automation plans across branches', () => {
+  it('load drops ids removed from the tree and keeps the rest (0.6 -> 0.7 saves)', () => {
     const u = new Upgrades();
-    const has = (id: string) => id === 'hands';
-    expect(u.state('belt_plans', 40, has)).toBe('ok'); // available from the start
-    expect(u.state('rake_plans', 1000, has)).toBe('locked'); // needs belt_plans
-    expect(u.state('power', 1000, has)).toBe('locked'); // needs rake_plans
-    u.buy('belt_plans');
-    expect(u.state('rake_plans', 60, has)).toBe('ok');
-    expect(u.state('power', 1000, has)).toBe('locked');
-    u.buy('rake_plans');
-    expect(u.state('power', 150, has)).toBe('ok');
-    expect(u.state('rake_rate', 40, has)).toBe('ok');
+    u.load({ boots: 2, belt_plans: 1, rake_plans: 1, power: 1, deal: 1 } as never);
+    expect(u.levels).toEqual({ boots: 2, deal: 1 });
   });
 
-  it('derives automation numbers from the new stats', () => {
-    const base = derive({}, sumPerks([]));
-    expect(base.beltSpeed).toBeCloseTo(0.7);
-    expect(base.rakeRate).toBe(12);
-    expect(base.rakeWidth).toBeCloseTo(1.0);
-    expect(base.powerGen).toBe(6);
-    expect(base.fuelCap).toBe(100);
-    const up = derive({ belt_speed: 2, rake_rate: 1, rake_width: 2, gen_out: 3, firebox: 5 }, sumPerks([]));
-    expect(up.beltSpeed).toBeCloseTo(0.7 * 1.3); // pct: 1 + 0.15×2
-    expect(up.rakeRate).toBeCloseTo(12 * 1.15);
-    expect(up.rakeWidth).toBeCloseTo(2.0);
-    expect(up.powerGen).toBe(12);
-    expect(up.fuelCap).toBe(225);
-  });
 });

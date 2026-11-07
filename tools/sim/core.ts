@@ -5,13 +5,8 @@ import { CONTAINERS, ContainerId, ItemId, TOOLS, ToolId, itemById } from '../../
 import { UPGRADES, UpgradeId } from '../../src/data/upgrades';
 import type { Perks } from '../../src/data/needles';
 import { Upgrades } from '../../src/game/Upgrades';
-import type { Levels } from '../../src/data/upgrades';
 import { Derived, derive } from '../../src/game/stats';
 import { Stamina } from '../../src/game/stamina';
-
-// Automation branches are excluded: the sim does not model machine income, so buying those
-// nodes here would only distort the "everything bought" timeline. See autoIncome() in stage 2a.
-const SIM_BRANCHES = new Set(['lines', 'power', 'automation']);
 
 type XZ = readonly [number, number];
 
@@ -173,7 +168,6 @@ function nextGoal(owned: Set<ItemId>, ups: Upgrades, perks: Perks, rate: number,
   }
   let cheapest: Goal | null = null;
   for (const u of UPGRADES) {
-    if (SIM_BRANCHES.has(u.branch)) continue; // automation income is not modelled here
     const price = ups.nextPrice(u.id);
     if (price === null || ups.missing(u.id, (i) => owned.has(i)).length) continue;
     const g: Goal = { kind: 'upgrade', id: u.id, price };
@@ -185,21 +179,6 @@ function nextGoal(owned: Set<ItemId>, ups: Upgrades, perks: Perks, rate: number,
 }
 
 
-/** One full automation rig (plans + rake + generator + 15 m of belt), net $/min after fuel.
- *  The sim player loop does not model machines; this is the standalone payback number. */
-export function autoIncome(levels: Levels, perks: Perks, price: number): { net: number; strandsPerMin: number; cost: number } {
-  const d = derive(levels, perks);
-  const ups = new Upgrades();
-  ups.levels = { ...levels };
-  const planCost = [ 'belt_plans', 'rake_plans', 'power' ].reduce((t, id) => t + (ups.nextPrice(id as UpgradeId) ?? 0), 0);
-  const buildCost = BALANCE.automation.rakePrice + BALANCE.automation.generatorPrice + BALANCE.automation.beltPricePerM * 15;
-  const cost = planCost + buildCost;
-  const powered = 1; // one 0.8 kW rake on one 6+ kW generator: full power
-  const strandsPerMin = Math.round(d.rakeRate * powered * 60);
-  const burnPerMin = BALANCE.automation.burnPerSec * (BALANCE.automation.rakeKw / BALANCE.automation.generatorKw) * 60;
-  const net = Math.round((strandsPerMin - burnPerMin) * price * 100) / 100;
-  return { net, strandsPerMin, cost };
-}
 export interface SimOptions { minutes?: number; perks?: Perks; script?: readonly ItemId[] }
 
 /** The tutorial order of the first shop items. */

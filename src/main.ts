@@ -17,11 +17,7 @@ import { CONTAINER_WORLD, ContainerProps } from './game/containers';
 import { NeedleField, placeNeedles } from './game/needles';
 import { supportHeight } from './game/support';
 import { STEPS, Tutorial } from './game/tutorial';
-import { Factory, factoryActive } from './game/factory';
-import { BuildMode } from './game/buildMode';
-import { BuildingViews, Ghost, inForbiddenZone, makeGhost } from './world/buildings';
-import { BuildScreen } from './ui/build';
-import type { BuildingId } from './data/buildings';
+import { simActive } from './core/simgate';
 import { BARN } from './world/nature';
 import { EndingScreen } from './ui/ending';
 import { needleName, needlePerk } from './ui/needleText';
@@ -46,7 +42,6 @@ import { Graphics, PRESETS, RESOLUTION_SCALE, Settings, detectGpu, loadSettings,
 import { BENCH_SECONDS, BenchPose, Benchmark, loadBench, pickPreset, saveBench } from './gfx/bench';
 import { SettingsScreen } from './ui/settings';
 
-const A = BALANCE.automation;
 const params = new URLSearchParams(location.search);
 // Dev mode: ?dev plus a dev environment (the dev server, or a VITE_DEV_TOOLS=1 build).
 // Its own save slot, a DEV badge and infinite money; a normal build never enables it.
@@ -137,12 +132,9 @@ const containers = new ContainerProps(inv);
 scene.add(containers.group);
 const support = (x: number, z: number, maxY: number, r: number) => supportHeight(grid, colliders.boxes, x, z, maxY, r);
 const clampTo = (v: number, h: number) => Math.max(-h + 0.5, Math.min(h - 0.5, v));
-let factory: Factory;
 const world: World = {
   counter: shed.counter, shop: shed.shop, door: shed.door, board: shed.board, containers, needles, support,
   belt: shed.belt, counterTop: shed.counterTop,
-  buildingTarget: (ray) => views.raycast(ray),
-  fuelCapOf: () => game.d.fuelCap,
   clamp: (x, z, from) => (shed.inside(from.x, from.z) ? [clampTo(x, BARN.hx), clampTo(z, BARN.hz)] : [x, z]),
   exited: shed.exited,
 };
@@ -165,12 +157,11 @@ const events: GameEvents = {
     hotbar.render(inv, capOf);
     hotbar.flash(id);
   },
-  upgrade: (id, price) => {
+  upgrade: (_id, price) => {
     audio.purchase();
     hud.pop(`−${fmtMoney(price)}`, 'spend');
     hud.bumpMoney();
     hotbar.render(inv, capOf);
-    if (id === 'belt_plans') hud.toast(t('build.plansKicker'), t('build.plansTitle'), rich(t('build.plansText')), 'needle', 8);
     shed.updatePriceBoards(game.price);
     persist();
   },
@@ -203,20 +194,7 @@ const events: GameEvents = {
 };
 const game = new Game(grid, camera, world, input, particles, inv, events);
 const capOf = (id: ItemId) => (isContainer(id) ? game.containerCapacity(id) : 0);
-// Automation: rules first, then the world layer rebuilt from the (possibly saved) building list.
-factory = new Factory(grid, colliders, game.up, { x: shed.beltLow.x, z: shed.beltLow.z }, (n) => world.belt.dump(n), () => game.d.fuelCap);
-const views = new BuildingViews(shed.mats, hayMat);
-scene.add(views.group);
-const buildMode = new BuildMode({
-  factory,
-  inside: (x, z) => shed.inside(x, z),
-  forbidden: (x, z) => inForbiddenZone(x, z, shed.beltLow),
-  money: () => game.money,
-  spend: (n) => { if (game.money + 1e-9 < n) return false; game.money -= n; audio.purchase(); hud.bumpMoney(); return true; },
-  refund: (n) => { game.money += n; audio.coin(); hud.bumpMoney(); },
-  wadCount: () => factory.wadCount(),
-});
-// Upgrades change capacities and gate the plans, so they load before the buildings do.
+// Upgrades and perks load before anything reads Derived.
 game.up.load(save?.upgrades);
 game.refreshPerks();
 shed.updatePriceBoards(game.price); // boards are painted at build time with the base price: refresh from the save
@@ -227,9 +205,6 @@ if (save) {
   game.escaped = !!save.escaped && game.unlocked;
   if (save.belt?.length) shed.belt.restore(save.belt); // hay that was still riding the conveyor
 }
-if (save?.build?.length) factory.load(save.build); // after the plans are loaded
-views.rebuild(factory.buildings);
-factory.buildings.filter((b) => b.id === 'belt').forEach((b) => b.path && views.syncWads(b.conveyor!, b.path));
 shed.setNeedles(needles.found);
 if (game.unlocked) shed.unlock(true);
 const tutorial = new Tutorial();
@@ -307,15 +282,7 @@ const shop = new ShopScreen(game, icons);
 shop.onBuyFail = () => audio.thud();
 const tree = new TreeScreen(game, icons, upIcons);
 tree.onBuyFail = () => audio.thud();
-const buildScreen = new BuildScreen(game, factory);
-const ghosts = new Map<BuildingId, Ghost>();
-function openBuild(): void {
-  if (screenOpen()) return;
-  audio.tick();
-  buildScreen.open();
-  document.exitPointerLock();
-}
-const screenOpen = () => shop.isOpen || tree.isOpen || buildScreen.isOpen || ending.isOpen;
+const screenOpen = () => shop.isOpen || tree.isOpen || ending.isOpen;
 function openShop(): void {
   if (screenOpen()) return;
   audio.tick();
@@ -338,13 +305,6 @@ const onScreenClose = (relock: boolean) => {
 };
 shop.onClose = onScreenClose;
 tree.onClose = onScreenClose;
-buildScreen.onClose = onScreenClose;
-buildScreen.onPick = (id) => {
-  buildMode.choose(id);
-  const ghost = ghosts.get(id) ?? (ghosts.set(id, makeGhost(id)), ghosts.get(id)!);
-  ghost.show();
-  input.requestLock();
-};
 input.onLockChange = (locked) => {
   if (locked) { overlay.classList.add('hidden'); return; }
   persist();
@@ -358,7 +318,7 @@ function persist(): void {
     money: game.money, carried: game.carried, inv: inv.serialize(),
     player: { x: player.pos.x, y: player.pos.y, z: player.pos.z, yaw: player.yaw, pitch: player.pitch },
     needles: needles.saves, tutorial: tutorial.step, stats: game.stats, escaped: game.escaped,
-    upgrades: game.up.serialize(), belt: shed.belt.riding(), build: factory.serialize(),
+    upgrades: game.up.serialize(), belt: shed.belt.riding(),
   }, grid);
 }
 setInterval(persist, BALANCE.autosaveSeconds * 1000);
@@ -474,16 +434,7 @@ if (params.has('bench')) setTimeout(startBench, 1500);
 
 // Main loop
 let last = performance.now(), fpsFrames = 0, fpsTime = 0, lastFps = 0, laggy = 0, perfHinted = false;
-let tickAcc = 0, noRoomShown = false;
 let manualFrame = false; // test steps drive frame() by hand and must not spawn the real loop
-/** Where the crosshair ray meets the build plane (y = 0). */
-function aimOnFloor(): { x: number; z: number } {
-  const dir = new THREE.Vector3();
-  camera.getWorldDirection(dir);
-  const t = dir.y < -1e-4 ? -camera.position.y / dir.y : 6;
-  const p = camera.position.clone().addScaledVector(dir, Math.max(0.8, Math.min(8, t)));
-  return { x: p.x, z: p.z };
-}
 let shadowDirty = false, shadowAt = 0;
 function countFps(elapsed: number): void {
   fpsFrames++;
@@ -518,53 +469,8 @@ function frame(now: number): void {
   vm.steady = game.d.sway;
   if (devMode) game.money = 1_000_000_000; // infinite money: topped up every frame, before any spending
   player.update(dt, input);
-  // Fixed 20 Hz factory tick, independent of the render rate; the yard sleeps on the pause card and screens.
-  if (factoryActive(input.locked, screenOpen())) {
-    tickAcc += dt;
-    while (tickAcc >= 0.05) { factory.tick(0.05, { rakeRate: game.d.rakeRate, rakeWidth: game.d.rakeWidth }); tickAcc -= 0.05; }
-    factory.update(dt, game.d.beltSpeed);
-  } else tickAcc = 0; // nothing may build up while paused: the next play frame starts from zero
-  if (factory.noRoom && !noRoomShown) { noRoomShown = true; hud.pop(t('notice.noRoom'), 'spend'); }
-  if (!factory.noRoom) noRoomShown = false;
   game.update(dt, input.locked && player.sprinting);
   if (input.locked && input.wasPressed('Tab')) openTree();
-  if (input.locked && input.wasPressed('KeyB')) openBuild();
-  // Build mode: the ghost or the belt chain follows the aim; the rules layer is suppressed.
-  game.suppressed = buildMode.busy;
-  if (buildMode.busy) {
-    const aim = aimOnFloor();
-    if (buildMode.activity.kind === 'ghost') {
-      const id = buildMode.activity.id;
-      const ghost = ghosts.get(id)!;
-      ghost.move(aim.x, aim.z, buildMode.activity.rot);
-      ghost.setValid(buildMode.canPlaceMachine(id, aim.x, aim.z));
-      if (input.lmbPressed) {
-        const ref = buildMode.placeMachine(id, aim.x, aim.z, buildMode.activity.rot);
-        if (ref) { audio.place(); views.rebuild(factory.buildings); buildMode.cancel(); ghost.hide(); }
-        else audio.thud();
-      } else if (input.rmbPressed) { buildMode.cancel(); ghost.hide(); }
-    } else if (buildMode.activity.kind === 'belt') {
-      const end = buildMode.chainEnd ?? aim;
-      const dx = aim.x - end.x, dz = aim.z - end.z;
-      const len = Math.max(A.segmentMinM, Math.min(A.segmentMaxM, Math.hypot(dx, dz)));
-      const dir = Math.hypot(dx, dz) > 1e-6 ? { x: dx / Math.hypot(dx, dz), z: dz / Math.hypot(dx, dz) } : { x: 0, z: 1 };
-      const ghost = ghosts.get('belt')!;
-      ghost.move(end.x + dir.x * len / 2, end.z + dir.z * len / 2, Math.atan2(dir.x, dir.z));
-      ghost.setValid(buildMode.canBeltSegment(aim.x, aim.z));
-      if (input.lmbPressed) {
-        if (buildMode.placeBeltSegment(aim.x, aim.z)) { audio.place(); views.rebuild(factory.buildings); }
-        else audio.thud();
-      } else if (input.rmbPressed) {
-        if (buildMode.undoLastSegment()) { audio.tick(); views.rebuild(factory.buildings); }
-        else { buildMode.cancel(); ghosts.get('belt')!.hide(); }
-      }
-      if (!buildMode.busy) ghost.hide();
-    }
-  } else {
-    // Demolition: hold [X] on the aimed building.
-    const target = game.target?.kind === 'building' ? game.target.ref : null;
-    if (buildMode.demolishStep(dt, target, input.down('KeyX'))) { audio.thud(); views.rebuild(factory.buildings); }
-  }
   vm.update(dt, { speed: Math.hypot(player.vel.x, player.vel.z), onGround: player.onGround, mouseDX: input.mouseDX, mouseDY: input.mouseDY });
   const load = game.load();
   vm.setLoad(load ? load[0] / load[1] : 0);
@@ -573,7 +479,7 @@ function frame(now: number): void {
   stackView.update(5);
   containers.update(dt, (id, x, z, maxY) => support(x, z, maxY, CONTAINER_WORLD[id].radius), capOf);
   needles.update(dt, grid, (x, z, maxY) => support(x, z, maxY, 0.04));
-  const doorMoving = shed.update(dt, factoryActive(input.locked, screenOpen()));
+  const doorMoving = shed.update(dt, simActive(input.locked, screenOpen()));
   if (stackView.changed || containers.moved || doorMoving) { shadowDirty = true; stackView.changed = containers.moved = false; }
   // Each refresh draws the scene once more into the shadow map; 30 a second is plenty for digging and the door.
   if (shadowDirty && now - shadowAt >= 33) { renderer.shadowMap.needsUpdate = true; shadowDirty = false; shadowAt = now; }
@@ -623,7 +529,7 @@ requestAnimationFrame(frame);
 // Debug handle for tests and the browser console. `step(dtMs)` advances the whole game by hand:
 // the hidden-tab test harness has no rAF, and `input` lets it fake the pointer lock.
 (window as unknown as { __game: unknown }).__game = {
-  game, player, grid, renderer, camera, scene, persist, inv, shop, icons, vm, settings, settingsScreen, applySettings, sun, needles, containers, shed, tutorial, ending, hud, tree, factory, buildMode, views, buildScreen,
+  game, player, grid, renderer, camera, scene, persist, inv, shop, icons, vm, settings, settingsScreen, applySettings, sun, needles, containers, shed, tutorial, ending, hud, tree,
   input,
   dev: devMode,
   step: (dtMs: number) => { manualFrame = true; try { frame(last + Math.max(0, Math.min(50, dtMs))); } finally { manualFrame = false; } },

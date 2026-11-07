@@ -357,14 +357,3 @@ body.benchmarking #hud, body.benchmarking #overlay { display: none; }
 #bench .bar i { display: block; height: 100%; width: 0; background: var(--yellow); }
 
 /* Стройка [B]: same panel language as the shop. */
-#build-list { list-style: none; margin: 0; padding: 16px; display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 8px; overflow: auto; }
-#build-list .card { display: flex; gap: 10px; padding: 10px 12px; border: 1px solid var(--line); border-radius: 2px; background: rgba(0, 0, 0, .35); }
-#build-list .card.locked { opacity: .55; }
-#build-list .cat { font: 600 11px var(--font); letter-spacing: .08em; text-transform: uppercase; color: var(--text-3); }
-#build-list .name { font: 700 17px var(--font); color: var(--yellow); margin: 2px 0 4px; }
-#build-list .stats { font: 500 13px/1.35 var(--font); color: var(--text-2); min-height: 36px; }
-#build-list .foot { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-top: 6px; }
-#build-list .price { font: 700 18px var(--font); color: var(--green); }
-#build-list .status { display: inline-flex; align-items: center; gap: 4px; font: 600 12px var(--font); color: var(--text-3); }
-#build-list .need { font: 600 12px var(--font); color: #d08040; }
-#build-hint { font: 600 12px var(--font); color: var(--text-3); }

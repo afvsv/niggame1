@@ -2,16 +2,14 @@
 // Shop items appear in the tree as "unlock" cards: they are bought in the shop and open their own upgrades.
 import type { ItemId } from './tools';
 
-export type BranchId = 'hand' | 'fitness' | 'selling' | 'needles' | 'lines' | 'power' | 'automation';
+export type BranchId = 'hand' | 'fitness' | 'selling' | 'needles';
 
 export type UpgradeId =
   | 'hand_more' | 'toy_more' | 'spade_more' | 'fork_more' | 'bucket_more' | 'barrow_more'
   | 'boots' | 'springs' | 'steady' | 'back' | 'breath' | 'reach' | 'swing'
   | 'deal'
   | 'coil' | 'precise'
-  | 'belt_plans' | 'belt_speed'
-  | 'rake_plans' | 'rake_rate' | 'rake_width'
-  | 'power' | 'gen_out' | 'firebox';
+;
 
 /**
  * What an upgrade changes. `add` stats sum `per × level`; `pct` stats multiply by `1 + Σ per × level`;
@@ -24,13 +22,11 @@ export const STAT_MODE = {
   'reach': 'add', 'swing.cost': 'pow',
   'price': 'pct',
   'detector.range': 'pct', 'detector.muffle': 'pow',
-  'belt.speed': 'pct', 'rake.rate': 'pct', 'rake.width': 'add',
-  'power.out': 'add', 'fuel.cap': 'add',
 } as const;
 export type Stat = keyof typeof STAT_MODE;
 
 /** 3D icon models drawn for upgrades that do not belong to a shop item. */
-export type UpgradeIcon = 'boots' | 'spring' | 'level' | 'kettlebell' | 'bottle' | 'ladder' | 'feather' | 'crate' | 'magnifier' | 'belt' | 'rake' | 'plug';
+export type UpgradeIcon = 'boots' | 'spring' | 'level' | 'kettlebell' | 'bottle' | 'ladder' | 'feather' | 'crate' | 'magnifier';
 
 export interface UpgradeDef {
   id: UpgradeId;
@@ -70,17 +66,7 @@ export const UPGRADES: readonly UpgradeDef[] = [
   // Needle search.
   up({ id: 'coil', branch: 'needles', max: 3, base: 40, growth: 1.7, of: 'detector', effects: [{ stat: 'detector.range', per: 0.2 }] }),
   up({ id: 'precise', branch: 'needles', max: 1, base: 90, growth: 1, icon: 'magnifier', requires: ['detector'], effects: [{ stat: 'detector.muffle', per: 0.5 }] }),
-  // Hay lines: belts and their motors.
-  up({ id: 'belt_plans', branch: 'lines', max: 1, base: 40, growth: 1, icon: 'belt', effects: [] }),
-  up({ id: 'belt_speed', branch: 'lines', max: 8, base: 30, growth: 1.6, icon: 'belt', requires: ['belt_plans'], effects: [{ stat: 'belt.speed', per: 0.15 }] }),
-  // Automation: the rake at the stack.
-  up({ id: 'rake_plans', branch: 'automation', max: 1, base: 60, growth: 1, icon: 'rake', requires: ['belt_plans'], effects: [] }),
-  up({ id: 'rake_rate', branch: 'automation', max: 5, base: 40, growth: 1.6, icon: 'rake', requires: ['rake_plans'], effects: [{ stat: 'rake.rate', per: 0.15 }] }),
-  up({ id: 'rake_width', branch: 'automation', max: 5, base: 60, growth: 1.6, icon: 'rake', requires: ['rake_plans'], effects: [{ stat: 'rake.width', per: 0.5 }] }),
   // Power: the generator and its fuel box.
-  up({ id: 'power', branch: 'power', max: 1, base: 150, growth: 1, icon: 'plug', requires: ['rake_plans'], effects: [] }),
-  up({ id: 'gen_out', branch: 'power', max: 6, base: 80, growth: 1.6, icon: 'plug', requires: ['power'], effects: [{ stat: 'power.out', per: 2 }] }),
-  up({ id: 'firebox', branch: 'power', max: 5, base: 60, growth: 1.6, icon: 'plug', requires: ['power'], effects: [{ stat: 'fuel.cap', per: 25 }] }),
 ];
 
 export const BRANCHES: ReadonlyArray<{ id: BranchId; color: string }> = [
@@ -88,9 +74,6 @@ export const BRANCHES: ReadonlyArray<{ id: BranchId; color: string }> = [
   { id: 'fitness', color: '#d9a46c' },
   { id: 'selling', color: '#e8875a' },
   { id: 'needles', color: '#a98ad8' },
-  { id: 'lines', color: '#5aa7d8' },
-  { id: 'power', color: '#e8c34a' },
-  { id: 'automation', color: '#8fbf6a' },
 ];
 
 export type Levels = Partial<Record<UpgradeId, number>>;

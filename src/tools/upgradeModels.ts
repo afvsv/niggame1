@@ -5,7 +5,7 @@ import { mats } from './models';
 // Small props for upgrade icons, built from primitives like the tool models.
 // They only appear as icons in the tree, so they are rendered once at load.
 
-export const UPGRADE_ICONS: readonly UpgradeIcon[] = ['boots', 'spring', 'level', 'kettlebell', 'bottle', 'ladder', 'feather', 'crate', 'magnifier', 'belt', 'rake', 'plug'];
+export const UPGRADE_ICONS: readonly UpgradeIcon[] = ['boots', 'spring', 'level', 'kettlebell', 'bottle', 'ladder', 'feather', 'crate', 'magnifier'];
 
 const std = (o: THREE.MeshStandardMaterialParameters) => new THREE.MeshStandardMaterial(o);
 let L: Record<string, THREE.Material> | null = null;
@@ -133,46 +133,6 @@ function magnifier(): THREE.Group {
   return group(rim, lens, neck, handle);
 }
 
-function belt(): THREE.Group {
-  const g = new THREE.Group();
-  // A short belt segment: dark band between two steel rails, with rollers at both ends.
-  g.add(mesh(new THREE.BoxGeometry(0.3, 0.03, 0.16), 'rubber', 0, 0.09, 0));
-  for (const s of [-1, 1]) g.add(mesh(new THREE.BoxGeometry(0.32, 0.06, 0.025), 'metalDark', 0, 0.1, s * 0.09));
-  for (const x of [-0.14, 0.14]) g.add(mesh(new THREE.CylinderGeometry(0.045, 0.045, 0.17, 14).rotateZ(Math.PI / 2), 'metal', x, 0.09, 0));
-  for (const x of [-0.1, 0.1]) g.add(mesh(new THREE.BoxGeometry(0.03, 0.075, 0.03), 'metalDark', x, 0.037, 0));
-  return g;
-}
-
-function rake(): THREE.Group {
-  const g = new THREE.Group();
-  // A piston rake: heavy frame on feet, a row of curved tines facing the stack.
-  g.add(mesh(new THREE.BoxGeometry(0.3, 0.06, 0.12), 'woodDark', 0, 0.16, 0));
-  g.add(mesh(new THREE.BoxGeometry(0.06, 0.12, 0.14), 'metalDark', 0, 0.08, 0.02));
-  for (const x of [-0.12, 0.12]) g.add(mesh(new THREE.BoxGeometry(0.05, 0.13, 0.05), 'iron', x, 0.065, -0.02));
-  const head = mesh(new THREE.BoxGeometry(0.28, 0.05, 0.04), 'metalDark', 0, 0.19, -0.14);
-  g.add(head);
-  for (let i = 0; i < 5; i++) {
-    const tine = mesh(new THREE.CylinderGeometry(0.008, 0.004, 0.14, 8), 'metal', -0.12 + i * 0.06, 0.12, -0.19, -0.5);
-    g.add(tine);
-  }
-  return g;
-}
-
-function plug(): THREE.Group {
-  const g = new THREE.Group();
-  // A plug with two pins and a loop of cable.
-  const body = mesh(new THREE.CylinderGeometry(0.055, 0.065, 0.09, 18), 'rubber', 0, 0.12, 0, Math.PI / 2 - 0.35);
-  g.add(body);
-  for (const s of [-1, 1]) g.add(mesh(new THREE.CylinderGeometry(0.009, 0.009, 0.06, 10), 'brass', s * 0.025, 0.15, 0.075, Math.PI / 2 - 0.35));
-  const cable: THREE.Vector3[] = [];
-  for (let i = 0; i <= 14; i++) {
-    const a = Math.PI * 0.9 - (i / 14) * Math.PI * 1.4;
-    cable.push(new THREE.Vector3(Math.cos(a) * 0.09 + 0.04, 0.012 + Math.sin(i / 14 * Math.PI) * 0.02, Math.sin(a) * 0.05 - 0.02));
-  }
-  g.add(new THREE.Mesh(new THREE.TubeGeometry(new THREE.CatmullRomCurve3(cable), 16, 0.011, 8), m('rubber')));
-  return g;
-}
-
 const POSES: Record<UpgradeIcon, [THREE.Euler, number]> = {
   boots: [new THREE.Euler(0, -0.7, 0), 0.35],
   spring: [new THREE.Euler(0, 0, 0), 0.45],
@@ -183,13 +143,10 @@ const POSES: Record<UpgradeIcon, [THREE.Euler, number]> = {
   feather: [new THREE.Euler(0.3, 0.4, -0.7), 0.25],
   crate: [new THREE.Euler(0, -0.6, 0), 0.5],
   magnifier: [new THREE.Euler(0, 0.3, -0.75), 0.2],
-  belt: [new THREE.Euler(0.35, 0.6, 0), 0.3],
-  rake: [new THREE.Euler(0.25, 0.5, 0), 0.3],
-  plug: [new THREE.Euler(0.2, -0.4, 0), 0.25],
 };
 
 export function upgradeIconModel(id: UpgradeIcon): { model: THREE.Group; pose: { rot: THREE.Euler; elevation: number; fill: number } } {
-  const build = { boots, spring, level: spiritLevel, kettlebell, bottle, ladder, feather, crate, magnifier, belt, rake, plug }[id];
+  const build = { boots, spring, level: spiritLevel, kettlebell, bottle, ladder, feather, crate, magnifier }[id];
   const [rot, elevation] = POSES[id];
   return { model: build(), pose: { rot, elevation, fill: 0 } };
 }

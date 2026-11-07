@@ -1,7 +1,6 @@
 import * as THREE from 'three';
 import { BALANCE } from '../data/balance';
 
-const A = BALANCE.automation;
 import { ContainerDef, ContainerId, ItemId, ToolDef, isContainer, itemById } from '../data/tools';
 import { NeedleId, Perks, sumPerks } from '../data/needles';
 import { UPGRADES, UpgradeId, upgradePrice, upgradeById } from '../data/upgrades';
@@ -12,7 +11,6 @@ import { HayParticles } from '../fx/particles';
 import { HayGrid } from '../haystack/grid';
 import { GridHit, raycastGrid } from '../haystack/raycast';
 import type { BeltIO } from './belt';
-import type { BuildingRef } from './factory';
 import { CONTAINER_WORLD, ContainerProps } from './containers';
 import { DetectorSignal, hayAlong, signalStrength } from './detector';
 import { Inventory } from './Inventory';
@@ -26,7 +24,6 @@ export type Target =
   | { kind: 'counter' } | { kind: 'shop' } | { kind: 'door' } | { kind: 'board' }
   | { kind: 'container'; id: ContainerId }
   | { kind: 'needle'; index: number }
-  | { kind: 'building'; ref: BuildingRef; point: THREE.Vector3 }
   | null;
 
 /** Hooks for feedback (sound, animation, UI). Game only decides the rules. */
@@ -65,10 +62,6 @@ export interface World {
   belt: BeltIO;
   /** A point at the kiosk window, for feedback. */
   counterTop: THREE.Vector3;
-  /** Ray test against player-built machines and belts. */
-  buildingTarget(ray: THREE.Raycaster): { ref: BuildingRef; dist: number; point: THREE.Vector3 } | null;
-  /** The current firebox capacity (the "Bigger firebox" upgrade). */
-  fuelCapOf(): number;
   /** Where something dropped at (x, z) from `maxY` comes to rest. */
   support(x: number, z: number, maxY: number, r: number): number;
   /** Keeps a put-down container inside the room the player stands in. */
@@ -86,8 +79,6 @@ export class Game {
   carried = 0;
   target: Target = null;
   hint = '';
-  /** Build mode: interactions are handled by the build layer, not the rules. */
-  suppressed = false;
   unlocked = false;
   escaped = false;
   perks: Perks = sumPerks([]);
@@ -182,8 +173,6 @@ export class Game {
       const h = this.raycaster.intersectObject(this.world[kind], true)[0];
       if (h && h.distance < bestDist) { best = { kind }; bestDist = h.distance; }
     }
-    const b = this.world.buildingTarget(this.raycaster);
-    if (b && b.dist < bestDist) { best = { kind: 'building', ref: b.ref, point: b.point }; bestDist = b.dist; }
     return best;
   }
 
@@ -193,7 +182,7 @@ export class Game {
     const wasTired = this.stamina.exhausted;
     this.stamina.update(dt, this.d.staminaMax, this.d.regen, sprinting);
     this.noticeT -= dt;
-    const live = this.input.locked && !this.suppressed; // no interaction while paused, a screen is open, or building
+    const live = this.input.locked; // no interaction while paused or with a screen open
     if (live) this.stats.time += dt;
     const target = (this.target = this.findTarget());
     if (live) {
@@ -235,28 +224,6 @@ export class Game {
         hint = t('hint.shop');
         if (use) this.ev.openShop();
         break;
-      case 'building': {
-        const ref = target.ref;
-        const n = this.carried + (held ? this.inv.state(held.id).fill : 0);
-        if (ref.id === 'belt') {
-          const cap = ref.conveyor ? A.yardItemCap : 0;
-          hint = n > 0 && cap
-            ? t('hint.belt.dump', { strands: strands(n) })
-            : t('hint.belt.empty');
-          if (use && n > 0) this.dumpToConveyor(ref, target.point);
-        } else if (ref.id === 'generator') {
-          const cap = this.world.fuelCapOf();
-          const room = Math.max(0, cap - (ref.fuel ?? 0));
-          hint = room > 0 && n > 0
-            ? t('hint.generator.refuel', { n: `${Math.round(ref.fuel ?? 0)}/${cap}` })
-            : t('hint.generator.full', { n: `${Math.round(ref.fuel ?? 0)}/${cap}` });
-          if (take && n > 0 && room > 0) this.refuelGenerator(ref, room);
-        } else {
-          hint = t('hint.machine');
-        }
-        hint += ` · ${t('hint.demolish')}`;
-        break;
-      }
       case 'door':
         hint = this.unlocked ? t('hint.doorOpen') : t('hint.doorLocked', { n: this.found.length, total: this.world.needles.total });
         break;
@@ -445,61 +412,6 @@ export class Game {
     this.cooldown = Math.max(this.cooldown, 0.25);
     this.ev.dump(n);
     return n;
-  }
-
-  /** Empties hands and a held container onto a player-built belt at the aim point. */
-  dumpToConveyor(ref: BuildingRef, point: THREE.Vector3): number {
-    const conv = ref.conveyor;
-    if (!conv) return 0;
-    const held = this.inv.held;
-    const available = this.carried + (held ? this.inv.state(held.id).fill : 0);
-    if (available <= 0) return 0;
-    const s = this.projectOnBelt(ref, point);
-    let left = available, inserted = 0, pos = s;
-    while (left > 0 && pos < conv.length) {
-      const chunk = Math.min(left, BALANCE.automation.wadMaxStrands);
-      if (conv.insert(chunk, pos)) { inserted += chunk; left -= chunk; pos += BALANCE.automation.gapM; }
-      else pos += BALANCE.automation.gapM;
-    }
-    if (inserted <= 0) { this.notice(t('notice.noRoom')); return 0; }
-    const hands = Math.min(this.carried, inserted);
-    this.carried -= hands;
-    if (held) this.inv.state(held.id).fill = Math.max(0, this.inv.state(held.id).fill - (inserted - hands));
-    this.cooldown = Math.max(this.cooldown, 0.25);
-    this.ev.dump(inserted);
-    return inserted;
-  }
-
-  /** Pours hay from the hands and a held container into a generator's firebox. */
-  refuelGenerator(ref: BuildingRef, room: number): number {
-    const held = this.inv.held;
-    const available = this.carried + (held ? this.inv.state(held.id).fill : 0);
-    const take = Math.min(available, room);
-    if (take <= 0) return 0;
-    const hands = Math.min(this.carried, take);
-    this.carried -= hands;
-    if (held) this.inv.state(held.id).fill = Math.max(0, this.inv.state(held.id).fill - (take - hands));
-    ref.fuel = (ref.fuel ?? 0) + take;
-    this.cooldown = Math.max(this.cooldown, 0.25);
-    this.ev.dump(take);
-    return take;
-  }
-
-  /** Where the aim point lands along a belt chain, metres from the start. */
-  private projectOnBelt(ref: BuildingRef, point: THREE.Vector3): number {
-    const path = ref.path ?? [];
-    let best = 0, bestDist = Infinity, acc = 0;
-    for (let i = 1; i < path.length; i++) {
-      const a = path[i - 1], b = path[i];
-      const abx = b.x - a.x, abz = b.z - a.z;
-      const len2 = abx * abx + abz * abz || 1;
-      const t = Math.max(0, Math.min(1, ((point.x - a.x) * abx + (point.z - a.z) * abz) / len2));
-      const px = a.x + abx * t, pz = a.z + abz * t;
-      const d = (px - point.x) ** 2 + (pz - point.z) ** 2;
-      if (d < bestDist) { bestDist = d; best = acc + Math.hypot(px - a.x, pz - a.z); }
-      acc += Math.hypot(abx, abz);
-    }
-    return best;
   }
 
   /** Pays for strands the conveyor has dropped into the booth. */
