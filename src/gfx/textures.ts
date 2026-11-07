@@ -138,19 +138,21 @@ export function genDirt(S = 512, seed = 5, o: { light?: number; tint?: RGB; stra
       const crumb = N.perlin(u * 96, v * 96, 96, 96);
       N.worley(u * 22, v * 22, 22, 22);
       const size = 0.12 + N.cell * 0.22;
-      const peb = N.cell > 0.8 ? 1 - smooth(size * 0.6, size, N.F1) : 0;
+      const peb = N.cell > 0.86 ? 1 - smooth(size * 0.6, size, N.F1) : 0;
       const L = L0 + f * 0.1 + big * 0.08 + crumb * 0.03;
       let r = L * tr, g = L * tg, b = L * tb;
-      if (peb > 0) { const pl = 0.3 + N.cell * 0.12 + f * 0.1; r = lerp(r, pl, peb); g = lerp(g, pl * 0.9, peb); b = lerp(b, pl * 0.76, peb); }
+      // pebbles stay within ~15% of the floor brightness: soft dirt patches, not holes
+      if (peb > 0) { const pl = 0.56 + N.cell * 0.05 + f * 0.06; r = lerp(r, pl, peb * 0.5); g = lerp(g, pl * 0.9, peb * 0.5); b = lerp(b, pl * 0.8, peb * 0.5); }
       const wet = clamp(-big * 1.4, 0, 0.5);
       r *= 1 - wet * 0.35; g *= 1 - wet * 0.35; b *= 1 - wet * 0.3;
       c.C[i * 3] = r; c.C[i * 3 + 1] = g; c.C[i * 3 + 2] = b;
-      c.H[i] = 0.2 + f * 0.12 + crumb * 0.03 + peb * 0.14;
+      c.H[i] = 0.2 + f * 0.12 + crumb * 0.03 + peb * 0.03;
       c.R[i] = 0.93 - peb * 0.18 - wet * 0.25;
     }
+  const STRAW_BITS: readonly RGB[] = [[0.94, 0.8, 0.5], [0.96, 0.86, 0.6], [0.88, 0.74, 0.44], [0.9, 0.78, 0.5]];
   strands(c, mulberry32(seed + 1), {
-    count: Math.round((o.straws ?? 520) * (S / 512) ** 2), len: [10, 70, 1.6], rad: [1.0, 1.9], bend: 0.15,
-    palette: HAY, lum: [0.6, 0.95], base: [0.3, 0.42], lift: 0.12, rough: [0.6, 0.8],
+    count: Math.round((o.straws ?? 520) * (S / 512) ** 2) / 2, len: [10, 60, 1.6], rad: [0.8, 1.5], bend: 0.1,
+    palette: STRAW_BITS, lum: [0.85, 1.05], base: [0.3, 0.42], lift: 0.12, rough: [0.6, 0.8],
   });
   cavity(c, 3, 2, 0.6);
   return finish(c, 3.2);

@@ -14,7 +14,7 @@ import { BARN, EXIT, Nature } from './nature';
 import { SUN_DIR } from './sky';
 import { timber } from './geo';
 import { Kit, prism, projectUV, tube, worldBox } from './kit';
-import { Mats, aFrame, bale, bollard, fernPot, hitPane, sellBooth, shadowed, supplyStall } from './booths';
+import { KIOSK_PLACEMENT, LIST_FRAME, Mats, PRICE_FRAME, STALL_PLACEMENT, aFrame, bale, bollard, fernPot, hitPane, sellBooth, shadowed, supplyStall } from './booths';
 import { hazardTexture, ledClock, needleBoard, plateTexture, priceListTexture, priceTexture } from './signs';
 import { Belt } from '../game/belt';
 import { HayLoad } from '../tools/models';
@@ -258,7 +258,7 @@ export function buildShed(scene: THREE.Scene, colliders: Colliders, tex: Texture
   // Along the exit wall: the selling kiosk closer to the stack (the far corner made the walk too long),
   // the supply stall past the door.
   const sell = sellBooth(m);
-  const counter = sell.kit.place(group, box, 13.4, -8.3, -Math.PI / 2);
+  const counter = sell.kit.place(group, box, KIOSK_PLACEMENT.x, KIOSK_PLACEMENT.z, KIOSK_PLACEMENT.ry);
   const counterTop = sell.top.clone().applyMatrix4(counter.matrixWorld);
   // The cargo on the belt is the same loose-straw pile the hands and tools show.
   const beltLow = sell.belt.points[0].clone().applyMatrix4(counter.matrixWorld);
@@ -273,9 +273,9 @@ export function buildShed(scene: THREE.Scene, colliders: Colliders, tex: Texture
     },
   );
   group.add(belt.group);
-  aFrame(m, priceTexture()).place(group, box, 10.9, -5.4, -Math.PI / 2 + 0.5);
-  const shop = supplyStall(m).place(group, box, 13.25, 13.0, -Math.PI / 2);
-  aFrame(m, priceListTexture()).place(group, box, 11.6, 9.4, -Math.PI / 2 + 0.3);
+  aFrame(m, priceTexture()).place(group, box, PRICE_FRAME.x, PRICE_FRAME.z, PRICE_FRAME.ry);
+  const shop = supplyStall(m).place(group, box, STALL_PLACEMENT.x, STALL_PLACEMENT.z, STALL_PLACEMENT.ry);
+  aFrame(m, priceListTexture()).place(group, box, LIST_FRAME.x, LIST_FRAME.z, LIST_FRAME.ry);
 
   // Clutter: bollards, a tripod and a fern by the door, bales, crates and barrels along the walls.
   const rnd = mulberry32(19);

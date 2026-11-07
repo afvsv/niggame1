@@ -1,10 +1,11 @@
 import * as THREE from 'three';
 
-/** One straw along +X from 0 to 1 with radius 1: a bent three-sided tube (9 vertices). */
+/** One straw along +X from 0 to 1 with radius 1: a near-straight three-sided tube (9 vertices),
+ *  with a slight droop at the end so it never reads as a worm. */
 export function strawGeometry(): THREE.BufferGeometry {
   const pos: number[] = [], nor: number[] = [], idx: number[] = [];
   for (let r = 0; r < 3; r++) {
-    const t = r / 2, bow = 0.06 * 4 * t * (1 - t) * 8, rr = r === 2 ? 0.5 : 1;
+    const t = r / 2, bow = 0.02 * t * t, rr = r === 2 ? 0.5 : 1;
     for (let k = 0; k < 3; k++) {
       const a = (k / 3) * Math.PI * 2;
       pos.push(t, Math.cos(a) * rr + bow, Math.sin(a) * rr);
@@ -23,7 +24,7 @@ export function strawGeometry(): THREE.BufferGeometry {
   return g;
 }
 
-const COLORS = ['#e3c47a', '#d6b060', '#c09445', '#efdb9c', '#a98a46', '#b99b58'].map((c) => new THREE.Color(c));
+const COLORS = ['#e8cf8a', '#dcbb66', '#cba74e', '#f0e0a8', '#c9a552', '#d4b466'].map((c) => new THREE.Color(c));
 
 /**
  * Loose straws lying on the hangar floor: a thick skirt around the stack base,
@@ -47,14 +48,14 @@ export function floorStraws(count: number, stackRadius: number, rnd: () => numbe
     } else { // sprinkle
       x = (rnd() - 0.5) * 2 * (area.hx - 0.3); z = (rnd() - 0.5) * 2 * (area.hz - 0.3);
     }
-    const len = 0.08 + rnd() * 0.22, rad = 0.003 + rnd() * 0.002;
+    const len = 0.18 + rnd() * 0.17, rad = 0.003 + rnd() * 0.002;
     e.set((rnd() - 0.5) * 0.25, rnd() * Math.PI * 2, (rnd() - 0.5) * 0.2);
     q.setFromEuler(e);
     p.set(x, rad + rnd() * 0.012, z);
     s.set(len, rad, rad);
     m.compose(p, q, s);
     mesh.setMatrixAt(i, m);
-    c.copy(COLORS[Math.floor(rnd() * COLORS.length)]).multiplyScalar(0.75 + rnd() * 0.3);
+    c.copy(COLORS[Math.floor(rnd() * COLORS.length)]).multiplyScalar(0.9 + rnd() * 0.25);
     mesh.setColorAt(i, c);
   }
   mesh.receiveShadow = true;

@@ -159,9 +159,13 @@ function toyShovel(): THREE.Group {
   g.add(place(rod(0.012, 0.014, 0.3, 'yellow'), 0, 0, -0.1));
   g.add(place(rod(0.016, 0.016, 0.07, 'yellow'), 0, 0, 0.06, 0, Math.PI / 2, 0)); // T-grip
   g.add(place(rod(0.016, 0.02, 0.04, 'yellow'), 0, 0, -0.26));
-  const outline: Array<[number, number]> = [[-0.055, 0], [0.055, 0], [0.065, 0.06], [0.06, 0.13], [0.03, 0.16], [-0.03, 0.16], [-0.06, 0.13], [-0.065, 0.06]];
-  g.add(place(blade(outline, 0.005, 5, 'red'), 0, 0.002, -0.275, 0.12, 0, 0));
-  return withLoad(g, 40, [0, 0.012, -0.36], [0.04, 0.03, 0.05], 11);
+  // the head: a yellow plastic scoop (lathe bowl opening towards the working end), not a red blob
+  const prof = [[0.012, 0], [0.05, 0.01], [0.06, 0.05], [0.055, 0.11], [0.03, 0.14], [0, 0.145]].map(([a, b]) => new THREE.Vector2(a, b));
+  const scoopMat = new THREE.MeshStandardMaterial({ color: '#e8b52e', roughness: 0.6, side: THREE.DoubleSide });
+  const scoop = new THREE.Mesh(new THREE.LatheGeometry(prof, 16).rotateX(-Math.PI / 2), scoopMat);
+  scoop.position.set(0, 0.002, -0.28);
+  g.add(scoop);
+  return withLoad(g, 40, [0, 0.012, -0.38], [0.04, 0.03, 0.05], 11);
 }
 
 function spade(): THREE.Group {
