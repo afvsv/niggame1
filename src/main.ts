@@ -159,11 +159,12 @@ const events: GameEvents = {
     hotbar.render(inv, capOf);
     hotbar.flash(id);
   },
-  upgrade: (_id, price) => {
+  upgrade: (id, price) => {
     audio.purchase();
     hud.pop(`−${fmtMoney(price)}`, 'spend');
     hud.bumpMoney();
     hotbar.render(inv, capOf);
+    if (id === 'belt_plans') hud.toast(t('build.plansKicker'), t('build.plansTitle'), rich(t('build.plansText')), 'needle', 8);
     persist();
   },
   tired: () => hud.flashStamina(),
